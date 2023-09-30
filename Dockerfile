@@ -4,5 +4,4 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 EXPOSE 9090
-RUN npm run build
-CMD [ "npm", "run", "test_server" ]
+CMD [ "npm", "run", "server" ]

@@ -1,17 +1,9 @@
 import { BigNumber } from '@ethersproject/bignumber';
-import { Currency, Token, TradeType } from '@uniswap/sdk-core';
-import { Pair } from '@uniswap/v2-sdk';
-import { Pool } from '@uniswap/v3-sdk';
-import _ from 'lodash';
-
+import { Token, TradeType } from '@uniswap/sdk-core';
 import {
-  ITokenListProvider,
-  ITokenProvider,
-  ITokenValidatorProvider,
   RawRiverexPool,
-  TokenValidationResult
 } from '../../../providers';
-import { ChainId, CurrencyAmount, log, poolToString } from '../../../util';
+import { ChainId, CurrencyAmount } from '../../../util';
 import {MixedRoute, RiverexRoute, V2Route, V3Route} from '../../router';
 import { AlphaRouterConfig } from '../alpha-router';
 import { RouteWithValidQuote } from '../entities/route-with-valid-quote';
@@ -28,21 +20,12 @@ import { GetQuotesResult, GetRoutesResult } from './model/results';
  * @template Route
  */
 export abstract class BaseQuoter<Route extends V2Route | V3Route | MixedRoute | RiverexRoute> {
-  protected tokenProvider: ITokenProvider;
   protected chainId: ChainId;
-  protected blockedTokenListProvider?: ITokenListProvider;
-  protected tokenValidatorProvider?: ITokenValidatorProvider;
 
   constructor(
-    tokenProvider: ITokenProvider,
     chainId: ChainId,
-    blockedTokenListProvider?: ITokenListProvider,
-    tokenValidatorProvider?: ITokenValidatorProvider
   ) {
-    this.tokenProvider = tokenProvider;
     this.chainId = chainId;
-    this.blockedTokenListProvider = blockedTokenListProvider;
-    this.tokenValidatorProvider = tokenValidatorProvider;
   }
 
   /**
@@ -59,7 +42,6 @@ export abstract class BaseQuoter<Route extends V2Route | V3Route | MixedRoute | 
   protected abstract getRoutes(
     tokenIn: Token,
     tokenOut: Token,
-    tradeType: TradeType,
     routingConfig: AlphaRouterConfig
   ): Promise<GetRoutesResult<Route>>
 
@@ -115,7 +97,7 @@ export abstract class BaseQuoter<Route extends V2Route | V3Route | MixedRoute | 
     gasModel?: IGasModel<RouteWithValidQuote>,
     gasPriceWei?: BigNumber
   ): Promise<GetQuotesResult> {
-    return this.getRoutes(tokenIn, tokenOut, tradeType, routingConfig)
+    return this.getRoutes(tokenIn, tokenOut, routingConfig)
       .then((routesResult) =>
         this.getQuotes(
           routesResult.routes,
@@ -130,46 +112,5 @@ export abstract class BaseQuoter<Route extends V2Route | V3Route | MixedRoute | 
           routesResult.rawPools
         )
       );
-  }
-
-  protected async applyTokenValidatorToPools<T extends Pool | Pair>(
-    pools: T[],
-    isInvalidFn: (
-      token: Currency,
-      tokenValidation: TokenValidationResult | undefined
-    ) => boolean
-  ): Promise<T[]> {
-    if (!this.tokenValidatorProvider) {
-      return pools;
-    }
-
-    log.info(`Running token validator on ${pools.length} pools`);
-
-    const tokens = _.flatMap(pools, (pool) => [pool.token0, pool.token1]);
-
-    const tokenValidationResults = await this.tokenValidatorProvider.validateTokens(tokens);
-
-    const poolsFiltered = _.filter(pools, (pool: T) => {
-      const token0Validation = tokenValidationResults.getValidationByToken(
-        pool.token0
-      );
-      const token1Validation = tokenValidationResults.getValidationByToken(
-        pool.token1
-      );
-
-      const token0Invalid = isInvalidFn(pool.token0, token0Validation);
-      const token1Invalid = isInvalidFn(pool.token1, token1Validation);
-
-      if (token0Invalid || token1Invalid) {
-        log.info(
-          `Dropping pool ${poolToString(pool)} because token is invalid. ${pool.token0.symbol
-          }: ${token0Validation}, ${pool.token1.symbol}: ${token1Validation}`
-        );
-      }
-
-      return !token0Invalid && !token1Invalid;
-    });
-
-    return poolsFiltered;
   }
 }

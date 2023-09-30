@@ -1,14 +1,15 @@
 import { Token } from '@uniswap/sdk-core';
 import retry from 'async-retry';
 import Timeout from 'await-timeout';
-import _ from 'lodash';
 import axios from 'axios';
 
-import { ChainId } from '../../util/chains';
+import { ChainId, WRAPPED_NATIVE_CURRENCY } from '../../util/chains';
 import { log } from '../../util/log';
 import { ProviderConfig } from '../provider';
-import { HTTP_URL_BY_CHAIN } from '../../util/poolsService';
-// import { gql, GraphQLClient } from 'graphql-request';
+import { usdGasTokensByChain } from '../../routers';
+import BigNumber from 'bignumber.js';
+
+const { toHex } = require('tron-format-address')
 
 export interface RiverexPool {
   id: string;
@@ -18,12 +19,10 @@ export interface RiverexPool {
   token1: {
     id: string;
   };
-  fee: string
-  supply: number;
+  fee: string;
   reserve: number;
-  reserveUSD: number;
-  reserve0:string;
-  reserve1:string;
+  reserve0: string;
+  reserve1: string;
 
   firstToken: {
     "chainId": number;
@@ -41,27 +40,21 @@ export interface RiverexPool {
 }
 
 export type RawRiverexPool = {
-  address: string;
-  firstToken: {
-    symbol: string;
-    address: string;
-    decimals:number;
-  };
-  secondToken: {
-    symbol: string;
-    address: string;
-    decimals:number;
-  };
-  reserve0:string;
-  reserve1:string;
-  fee: number;
-  trackedReserveETH?: string;
+  pair: string;
+  token0: string;
+  token0Symbol: string;
+  token0Decimal: number;
+  token1: string;
+  token1Symbol: string;
+  token1Decimal: number;
+  reserve0: string;
+  reserve1: string;
+  fee: string;
+  reserveEth?: string;
   reserveUsd: string;
 };
 
-const threshold = 0.0025;
-
-// const PAGE_SIZE = 1000;
+const threshold = 0.0;
 
 /**
  * Provider for getting riverex pools from the http api
@@ -77,8 +70,14 @@ export interface IRiverexProvider {
   ): Promise<{pools: RawRiverexPool[], poolsSanitized: RiverexPool[]}>;
 }
 
+interface ErrorType{
+  code: string;
+  message: string;
+}
+
 interface PoolsResult{
-  pairs: RawRiverexPool[];
+  data: RawRiverexPool[];
+  error?: ErrorType
 }
 
 export class RiverexProvider implements IRiverexProvider {
@@ -86,34 +85,25 @@ export class RiverexProvider implements IRiverexProvider {
 
   constructor(
     private chainId: ChainId,
-    private retries = 2,
-    private timeout = 360000,
-    private rollback = true,
+    private retries = 1,
+    private timeout = 360000
   ) {
-    const httpUrl = HTTP_URL_BY_CHAIN[this.chainId];
+    const httpUrl = process.env.URL_FOR_POOLS_GENERIC!.replace('${networkId}', this.chainId.toString());
     if (!httpUrl) {
       throw new Error(`No http url for chain id: ${this.chainId}`);
     }
-    // const subgraphUrl : GraphQLClient=
-    // this.client = new GraphQLClient(subgraphUrl);
   }
 
   public async getPools(
     _tokenIn?: Token,
     _tokenOut?: Token,
-    providerConfig?: ProviderConfig
   ): Promise<{pools: RawRiverexPool[]; poolsSanitized: RiverexPool[]}> {
-    let blockNumber = providerConfig?.blockNumber
-      ? await providerConfig.blockNumber
-      : undefined;
 
     let pools: RawRiverexPool[] = [];
 
-    // todo
     const config = {
       headers:{
-        Authorization: "",
-        'App-Id': ""
+        'APP_INTERNAL_AUTH':process.env.APP_INTERNAL_AUTH
       }
     };
 
@@ -128,9 +118,15 @@ export class RiverexProvider implements IRiverexProvider {
           //do {
             await retry(
               async () => {
-                const poolsResult = await axios.get<PoolsResult>(<string>HTTP_URL_BY_CHAIN[this.chainId], config);
+                const poolsResult = await axios.get<PoolsResult>(<string>process.env.URL_FOR_POOLS_GENERIC!
+                  .replace("{networkId}", this.chainId.toString())
+                  .replace("{minLat}",process.env.POOL_API_LATENCY!), config);
 
-                pairsPage = poolsResult.data.pairs;
+                if (poolsResult.data.error) {
+                  throw poolsResult.data.error;
+                }
+
+                pairsPage = poolsResult.data.data;
 
                 pairs = pairs.concat(pairsPage);
                 // lastId = pairs[pairs.length - 1]!.id;
@@ -159,10 +155,16 @@ export class RiverexProvider implements IRiverexProvider {
               `Timed out getting pools from api: ${this.timeout}`
             );
           });
-          pools = await Promise.race([getPoolsPromise, timerPromise]);
-          return;
-        } catch (err) {
-          throw err;
+          pools = await Promise.race([getPoolsPromise,timerPromise]);
+          // return;
+        } catch (e:any) {
+          log.error(e)
+          if (e && e.response && e.response.data && e.response.data.error && e.response.data.error.code === process.env.DATA_OUT_OF_SYNC_CODE){
+            throw e.response.data.error;
+          } else {
+            throw Error("failed to get pools");
+          }
+          // @ts-ignore
         } finally {
           timeout.clear();
         }
@@ -171,16 +173,6 @@ export class RiverexProvider implements IRiverexProvider {
       {
         retries: this.retries,
         onRetry: (err, retry) => {
-          if (
-            this.rollback &&
-            blockNumber &&
-            _.includes(err.message, 'indexed up to')
-          ) {
-            blockNumber = blockNumber - 10;
-            log.info(
-              `Detected subgraph indexing error. Rolled back block number to: ${blockNumber}`
-            );
-          }
           pools = [];
           log.info(
             { err },
@@ -195,122 +187,48 @@ export class RiverexProvider implements IRiverexProvider {
     // TODO: Remove. Temporary fix to ensure tokens without trackedReserveETH are in the list.
     const FEI = '0x956f47f50a910163d8bf957cf5846d573e7f87ca';
 
-    // const usdTokens = usdGasTokensByChain[this.chainId]!;
-    // const weth = WRAPPED_NATIVE_CURRENCY[this.chainId]!;
-
-    // if no usd pools are present then get from uniswap v2
-    // const usd_pools = pools.filter(pool =>{
-    //   return(((usdTokens || []).some(tok => tok.address === pool.firstToken.address) && pool.secondToken=== weth) || ((usdTokens || []).some(tok => tok.address === pool.secondToken.address) && pool.firstToken=== weth))
-    // })
-    //
-    //
-    // if (usd_pools.length == 0){
-    //
-    //   // get from uniswap subgraph
-    //   const client = new GraphQLClient(SUBGRAPH_URL_UNISWAP_V2_BY_CHAIN[this.chainId]!)
-    //
-    //   // todo make dynamic
-    //   const weth_usd_pool_address = "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc"
-    //
-    //   const query2 = gql`
-    //       query getPool($weth_usd_pool_address : String!){
-    //           pair(id:$weth_usd_pool_address){
-    //               id
-    //               token0 {
-    //                   id
-    //                   symbol
-    //               }
-    //               token1 {
-    //                   id
-    //                   symbol
-    //               }
-    //               reserveUSD
-    //               volumeUSD
-    //               reserve0
-    //               reserve1
-    //               trackedReserveETH
-    //           }
-    //       }
-    //   `;
-    //
-    //   let pairPage: RawV2SubgraphPool;
-    //   let pairs: RawV2SubgraphPool[] = [];
-    //
-    //   await retry(
-    //     async () => {
-    //       const poolsResult = await client.request<{
-    //         pair: RawV2SubgraphPool;
-    //       }>(query2, {
-    //         weth_usd_pool_address: weth_usd_pool_address
-    //       });
-    //
-    //       pairPage = poolsResult.pair;
-    //
-    //       pairs = pairs.concat(pairPage);
-    //     },
-    //     {
-    //       retries: this.retries,
-    //       onRetry: (err, retry) => {
-    //         pools = [];
-    //         log.info(
-    //           { err },
-    //           `Failed request for page of pools from subgraph. Retry attempt: ${retry}`
-    //         );
-    //       },
-    //     }
-    //   );
-    //
-    //   let pair = pairs[0]!
-    //
-    //   pools.push({
-    //     address: pair.id,
-    //     firstToken: {
-    //       symbol: pair.token0.symbol,
-    //       address: pair.token0.id
-    //     },
-    //     secondToken: {
-    //       symbol: pair.token1.symbol,
-    //       address: pair.token1.id
-    //     },
-    //     reserve0: pair.reserve0,
-    //     reserve1: pair.reserve1,
-    //     fee: 300,
-    //     reserveUsd: pair.reserveUSD,
-    //     trackedReserveETH: pair.trackedReserveETH
-    //   })
-    // }
-
-
-
+    if (String(this.chainId) == String(ChainId.TRON) || String(this.chainId) == String(ChainId.TRON_SHASTA)){
+      pools = pools.map(pool => {
+        return{
+          ...pool,
+          pair: toHex(pool.pair),
+          token0: toHex(pool.token0),
+          token1: toHex(pool.token1)
+        }
+      })
+    }
     const poolsSanitized: RiverexPool[] = pools
       .filter((pool) => {
         return (
-          pool.firstToken.address == FEI ||
-          pool.secondToken.address == FEI ||
-          (pool.trackedReserveETH && parseFloat(pool.trackedReserveETH) > threshold)
+          pool.token0 == FEI ||
+          pool.token1 == FEI ||
+          (parseFloat(pool.reserveEth || "0.0") >= threshold)
         );
       })
       .map((pool) => {
         return {
-          ...pool,
+          id: pool.pair.toLowerCase(),
           firstToken:{
-            ...pool.firstToken,
-            chainId: this.chainId
+            address: pool.token0,
+            chainId: this.chainId,
+            symbol: pool.token0Symbol,
+            decimals: pool.token0Decimal
           },
           secondToken:{
-            ...pool.secondToken,
-            chainId: this.chainId
+            address: pool.token1,
+            chainId: this.chainId,
+            symbol: pool.token1Symbol,
+            decimals: pool.token1Decimal
           },
-          fee: pool.fee.toString(),
-          id: pool.address.toLowerCase(),
-          reserve: parseFloat(pool.trackedReserveETH || pool.reserveUsd),
-          reserveUSD: parseFloat(pool.reserveUsd),
-          supply: parseFloat(pool.reserve0) + parseFloat(pool.reserve1),
+          reserve0: convertToValue(pool.reserve0,pool.token0Decimal),
+          reserve1: convertToValue(pool.reserve1,pool.token1Decimal),
+          fee: pool.fee!,
+          reserve: convertToValueNumber((pool.reserveEth || '0.0'),36).toNumber(),
           token0: {
-            id: pool.firstToken.address.toLowerCase()
+            id: pool.token0.toLowerCase()
           },
           token1: {
-            id: pool.secondToken.address.toLowerCase()
+            id: pool.token1.toLowerCase()
           }
         };
       });
@@ -319,6 +237,32 @@ export class RiverexProvider implements IRiverexProvider {
       `Got ${pools.length} Riverex pools from the http api. ${poolsSanitized.length} after filtering`
     );
 
+    const usdTokens = usdGasTokensByChain[this.chainId];
+    if (!usdTokens) {
+      log.error(`Could not find a USD token for computing gas costs on ${this.chainId}`)
+      throw new Error(
+        `Could not find a USD token for computing gas costs on ${this.chainId}`
+      );
+    }
+    const usdTokenAddresses = usdTokens.map(usdToken=> usdToken.address.toLowerCase())
+    const wrappedNativeTokenAddress = WRAPPED_NATIVE_CURRENCY[this.chainId].address;
+
+    pools = pools.filter(pool => {
+      const {token0: firstToken, token1: secondToken} = pool;
+      return ((usdTokenAddresses.includes(firstToken) && wrappedNativeTokenAddress == secondToken)
+        || (usdTokenAddresses.includes(secondToken) && wrappedNativeTokenAddress == firstToken)) ||
+        (firstToken == _tokenOut!.address && secondToken == wrappedNativeTokenAddress ||
+          secondToken == _tokenOut!.address && firstToken == wrappedNativeTokenAddress);
+    })
+
     return {poolsSanitized,pools};
   }
+}
+
+function convertToValue(anumber: string, decimals: number ){
+  return BigNumber(anumber).times(BigNumber(10).pow(decimals)).toFixed(0);
+}
+
+function convertToValueNumber(anumber: string, decimals: number ){
+  return BigNumber(anumber).times(BigNumber(10).pow(decimals));
 }

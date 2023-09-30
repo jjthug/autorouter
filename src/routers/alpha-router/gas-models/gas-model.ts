@@ -10,6 +10,7 @@ import {
   DAI_GÖRLI,
   DAI_KOVAN,
   DAI_MAINNET,
+  DAI_MOONBASE_ALPHA,
   DAI_OPTIMISM,
   DAI_OPTIMISM_GOERLI,
   DAI_OPTIMISTIC_KOVAN,
@@ -41,21 +42,14 @@ import {
   USDT_OPTIMISTIC_KOVAN,
   USDT_ROPSTEN,
   WBTC_GÖRLI,
+  USDT_TRON,
+  USDC_TRON, USDD_TRON_SHASTA, USDT_FANTOM, USDT_BSC_TESTNET, DAI_BSC_TESTNET
 } from '../../../providers/token-provider';
-import { IV2PoolProvider } from '../../../providers/v2/pool-provider';
-import {
-  ArbitrumGasData,
-  IL2GasDataProvider,
-  OptimismGasData,
-} from '../../../providers/v3/gas-data-provider';
-import { IV3PoolProvider } from '../../../providers/v3/pool-provider';
 import { CurrencyAmount } from '../../../util/amounts';
 import { ChainId } from '../../../util/chains';
 import {
-  MixedRouteWithValidQuote, RiverexRouteWithValidQuote,
-  RouteWithValidQuote,
-  V2RouteWithValidQuote,
-  V3RouteWithValidQuote,
+  RiverexRouteWithValidQuote,
+  RouteWithValidQuote
 } from '../entities/route-with-valid-quote';
 import {IRiverexPoolProvider} from "../../../providers/riverdex/pool-provider";
 import {RawRiverexPool} from "../../../providers";
@@ -71,6 +65,10 @@ export const usdGasTokensByChain: { [chainId in ChainId]?: Token[] } = {
     USDC_OPTIMISM_GOERLI,
     USDT_OPTIMISM_GOERLI,
   ],
+  [ChainId.MOONBASE_ALPHA]:[DAI_MOONBASE_ALPHA],
+  [ChainId.TRON]:[USDC_TRON,USDT_TRON],
+  [ChainId.TRON_SHASTA]:[USDD_TRON_SHASTA],
+  [ChainId.FANTOM]:[USDT_FANTOM],
   [ChainId.OPTIMISTIC_KOVAN]: [
     DAI_OPTIMISTIC_KOVAN,
     USDC_OPTIMISTIC_KOVAN,
@@ -88,31 +86,13 @@ export const usdGasTokensByChain: { [chainId in ChainId]?: Token[] } = {
   [ChainId.GNOSIS]: [USDC_ETHEREUM_GNOSIS],
   [ChainId.MOONBEAM]: [USDC_MOONBEAM],
   [ChainId.BSC]: [USDT_BSC, USDC_BSC, DAI_BSC],
+  [ChainId.BSC_TESTNET]: [USDT_BSC_TESTNET, DAI_BSC_TESTNET],
 };
 
 export type L1ToL2GasCosts = {
   gasUsedL1: BigNumber;
   gasCostL1USD: CurrencyAmount;
   gasCostL1QuoteToken: CurrencyAmount;
-};
-
-export type BuildOnChainGasModelFactoryType = {
-  chainId: ChainId;
-  gasPriceWei: BigNumber;
-  v3poolProvider: IV3PoolProvider;
-  amountToken: Token;
-  quoteToken: Token;
-  v2poolProvider: IV2PoolProvider;
-  l2GasDataProvider?:
-    | IL2GasDataProvider<OptimismGasData>
-    | IL2GasDataProvider<ArbitrumGasData>;
-};
-
-export type BuildV2GasModelFactoryType = {
-  chainId: ChainId;
-  gasPriceWei: BigNumber;
-  poolProvider: IV2PoolProvider;
-  token: Token;
 };
 
 export type BuildRiverexGasModelFactoryType = {
@@ -148,57 +128,12 @@ export type IGasModel<TRouteWithValidQuote extends RouteWithValidQuote> = {
   calculateL1GasFees?(routes: TRouteWithValidQuote[]): Promise<L1ToL2GasCosts>;
 };
 
-/**
- * Factory for building gas models that can be used with any route to generate
- * gas estimates.
- *
- * Factory model is used so that any supporting data can be fetched once and
- * returned as part of the model.
- *
- * @export
- * @abstract
- * @class IV2GasModelFactory
- */
-export abstract class IV2GasModelFactory {
-  public abstract buildGasModel({
-    chainId,
-    gasPriceWei,
-    poolProvider,
-    token,
-  }: BuildV2GasModelFactoryType): Promise<IGasModel<V2RouteWithValidQuote>>;
-}
-
 export abstract class IRiverexGasModelFactory {
   public abstract buildGasModel({
                                   chainId,
                                   gasPriceWei,
-                                  poolProvider,
                                   token,
                                   rawPools,
                                 }: BuildRiverexGasModelFactoryType): Promise<IGasModel<RiverexRouteWithValidQuote>>;
 }
 
-/**
- * Factory for building gas models that can be used with any route to generate
- * gas estimates.
- *
- * Factory model is used so that any supporting data can be fetched once and
- * returned as part of the model.
- *
- * @export
- * @abstract
- * @class IOnChainGasModelFactory
- */
-export abstract class IOnChainGasModelFactory {
-  public abstract buildGasModel({
-    chainId,
-    gasPriceWei,
-    v3poolProvider,
-    amountToken,
-    quoteToken,
-    v2poolProvider,
-    l2GasDataProvider,
-  }: BuildOnChainGasModelFactoryType): Promise<
-    IGasModel<V3RouteWithValidQuote | MixedRouteWithValidQuote>
-  >;
-}

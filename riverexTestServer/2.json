@@ -15,7 +15,7 @@
         "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
         "name": "Tether USD",
         "symbol": "USDT",
-        "decimals": 7
+        "decimals": 6
       },
       "liquidity": "33535962005903643",
       "reserve0": "561916385455021516635687",
@@ -102,7 +102,7 @@
         "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
         "name": "Tether USD",
         "symbol": "USDT",
-        "decimals": 8
+        "decimals": 6
       },
       "liquidity": "32284029217812145",
       "reserve0": "1000676375510185280058354",

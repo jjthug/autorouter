@@ -4,15 +4,16 @@ import invariant from 'tiny-invariant';
 import { ONE, ZERO } from '@uniswap/router-sdk';
 import JSBI from 'jsbi';
 
-const _100_PERCENT = 10000
+const _100_PERCENT = 100000
 const _10000 = JSBI.BigInt(_100_PERCENT)
-const PROTOCOL_FEE = 25 // 0.25% todo check protocol fee
 export class RiverexPair extends Pair{
   readonly fee: string;
+  readonly address: string;
 
-  constructor( _fee: string, currencyAmountA: CurrencyAmount<Token>, tokenAmountB: CurrencyAmount<Token>){
+  constructor( address: string,_fee: string, currencyAmountA: CurrencyAmount<Token>, tokenAmountB: CurrencyAmount<Token>){
     super(currencyAmountA,tokenAmountB);
     this.fee = _fee;
+    this.address = address;
   }
 
   public getOutputAmount(inputAmount: CurrencyAmount<Token>): [CurrencyAmount<Token>, Pair] {
@@ -22,8 +23,7 @@ export class RiverexPair extends Pair{
     }
     const inputReserve = this.reserveOf(inputAmount.currency)
     const outputReserve = this.reserveOf(inputAmount.currency.equals(this.token0) ? this.token1 : this.token0)
-    // todo test, check protocol fee
-    const inputAmountWithFee = JSBI.multiply(inputAmount.quotient, JSBI.BigInt( _100_PERCENT - PROTOCOL_FEE - parseInt(this.fee)))
+    const inputAmountWithFee = JSBI.multiply(inputAmount.quotient, JSBI.BigInt( _100_PERCENT - parseInt(this.fee)))
     const numerator = JSBI.multiply(inputAmountWithFee, outputReserve.quotient)
     const denominator = JSBI.add(JSBI.multiply(inputReserve.quotient, _10000), inputAmountWithFee)
     const outputAmount = CurrencyAmount.fromRawAmount(
@@ -49,7 +49,7 @@ export class RiverexPair extends Pair{
     const outputReserve = this.reserveOf(outputAmount.currency)
     const inputReserve = this.reserveOf(outputAmount.currency.equals(this.token0) ? this.token1 : this.token0)
     const numerator = JSBI.multiply(JSBI.multiply(inputReserve.quotient, outputAmount.quotient), _10000)
-    const denominator = JSBI.multiply(JSBI.subtract(outputReserve.quotient, outputAmount.quotient), JSBI.BigInt(_100_PERCENT - PROTOCOL_FEE - parseInt(this.fee)))
+    const denominator = JSBI.multiply(JSBI.subtract(outputReserve.quotient, outputAmount.quotient), JSBI.BigInt(_100_PERCENT - parseInt(this.fee)))
     const inputAmount = CurrencyAmount.fromRawAmount(
       outputAmount.currency.equals(this.token0) ? this.token1 : this.token0,
       JSBI.add(JSBI.divide(numerator, denominator), ONE)

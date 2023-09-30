@@ -19,46 +19,13 @@ export enum ChainId {
   CELO_ALFAJORES = 44787,
   GNOSIS = 100,
   MOONBEAM = 1284,
+  MOONBASE_ALPHA = 1287,
   BSC = 56,
+  BSC_TESTNET = 97,
+  TRON = 728126428,
+  TRON_SHASTA = 2494104990,
+  FANTOM = 250
 }
-
-// WIP: Gnosis, Moonbeam
-export const SUPPORTED_CHAINS: ChainId[] = [
-  ChainId.MAINNET,
-  ChainId.RINKEBY,
-  ChainId.ROPSTEN,
-  ChainId.KOVAN,
-  ChainId.OPTIMISM,
-  ChainId.OPTIMISM_GOERLI,
-  ChainId.OPTIMISTIC_KOVAN,
-  ChainId.ARBITRUM_ONE,
-  ChainId.ARBITRUM_RINKEBY,
-  ChainId.ARBITRUM_GOERLI,
-  ChainId.POLYGON,
-  ChainId.POLYGON_MUMBAI,
-  ChainId.GÖRLI,
-  ChainId.CELO_ALFAJORES,
-  ChainId.CELO,
-  ChainId.BSC,
-  // Gnosis and Moonbeam don't yet have contracts deployed yet
-];
-
-export const V2_SUPPORTED = [
-  ChainId.MAINNET,
-  ChainId.KOVAN,
-  ChainId.GÖRLI,
-  ChainId.RINKEBY,
-  ChainId.ROPSTEN,
-];
-
-export const HAS_L1_FEE = [
-  ChainId.OPTIMISM,
-  ChainId.OPTIMISM_GOERLI,
-  ChainId.OPTIMISTIC_KOVAN,
-  ChainId.ARBITRUM_ONE,
-  ChainId.ARBITRUM_RINKEBY,
-  ChainId.ARBITRUM_GOERLI,
-];
 
 export const NETWORKS_WITH_SAME_UNISWAP_ADDRESSES = [
   ChainId.MAINNET,
@@ -112,6 +79,14 @@ export const ID_TO_CHAIN_ID = (id: number): ChainId => {
       return ChainId.GNOSIS;
     case 1284:
       return ChainId.MOONBEAM;
+    case 1287:
+      return ChainId.MOONBASE_ALPHA;
+    case 728126428:
+      return ChainId.TRON;
+    case 2494104990:
+      return ChainId.TRON_SHASTA;
+    case 250:
+      return ChainId.FANTOM;
     default:
       throw new Error(`Unknown chain id: ${id}`);
   }
@@ -205,17 +180,27 @@ export const NATIVE_NAMES_BY_ID: { [chainId: number]: string[] } = {
     '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
   ],
   [ChainId.POLYGON]: [
-    'MATIC', '0x0000000000000000000000000000000000001010'
+    'MATIC','MATIC', '0x0000000000000000000000000000000000001010'
   ],
   [ChainId.POLYGON_MUMBAI]: [
     'MATIC',
+    'MATIC',
     '0x0000000000000000000000000000000000001010',
   ],
-  [ChainId.CELO]: ['CELO'],
-  [ChainId.CELO_ALFAJORES]: ['CELO'],
-  [ChainId.GNOSIS]: ['XDAI'],
-  [ChainId.MOONBEAM]: ['GLMR'],
+  [ChainId.CELO]: ['CELO','CELO','0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'],
+  [ChainId.CELO_ALFAJORES]: ['CELO','CELO','0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'],
+  [ChainId.GNOSIS]: ['XDAI','XDAI','0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'],
+  [ChainId.MOONBEAM]: ['GLMR','GLMR','0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'],
+  [ChainId.MOONBASE_ALPHA]: ['GLMR','GLMR','0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'],
+  [ChainId.TRON]: ['TRX','TRX','0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'],
+  [ChainId.TRON_SHASTA]: ['TRX','TRX','0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'],
+  [ChainId.FANTOM]: ['FTM','FTM','0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'],
   [ChainId.BSC]: [
+    'BNB',
+    'BNB',
+    '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+  ],
+  [ChainId.BSC_TESTNET]: [
     'BNB',
     'BNB',
     '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
@@ -372,6 +357,13 @@ export const WRAPPED_NATIVE_CURRENCY: { [chainId in ChainId]: Token } = {
     'WBNB',
     'Wrapped BNB'
   ),
+  [ChainId.BSC_TESTNET]: new Token(
+    97,
+    '0x2C8C88CcACBBa597B341952EA7c1B2AB3B6a34f0',
+    18,
+    'WNative',
+    'WNative'
+  ),
   [ChainId.OPTIMISM]: new Token(
     ChainId.OPTIMISM,
     '0x4200000000000000000000000000000000000006',
@@ -457,6 +449,34 @@ export const WRAPPED_NATIVE_CURRENCY: { [chainId in ChainId]: Token } = {
     18,
     'WGLMR',
     'Wrapped GLMR'
+  ),
+  [ChainId.MOONBASE_ALPHA]: new Token(
+    ChainId.MOONBASE_ALPHA,
+    '0x82171284Cff93C49F80752cc2dEa79e2ECDbD735',
+    18,
+    'WETH',
+    'Wrapped Ether'
+  ),
+  [ChainId.TRON]: new Token(
+    ChainId.TRON,
+    '0x891cdb91d149f23b1a45d9c5ca78a88d0cb44c18',
+    6,
+    'WTRX',
+    'Wrapped TRX'
+  ),
+  [ChainId.TRON_SHASTA]: new Token(
+    ChainId.TRON_SHASTA,
+    '0x232839800d58336f6541a30141921086ccdc58e7',
+    6,
+    'WNative',
+    'WNative'
+  ),
+  [ChainId.FANTOM]: new Token(
+    ChainId.FANTOM,
+    '0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83',
+    18,
+    'WFTM',
+    'Wrapped Fantom'
   ),
 };
 

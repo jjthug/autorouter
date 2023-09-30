@@ -1,7 +1,7 @@
-import { Token, TradeType } from '@uniswap/sdk-core';
+import { Token } from '@uniswap/sdk-core';
 import _ from 'lodash';
 
-import {ITokenListProvider,  RawRiverexPool} from '../../../providers';
+import { RawRiverexPool} from '../../../providers';
 import {
   CELO,
   CELO_ALFAJORES,
@@ -21,7 +21,6 @@ import {
   DAI_RINKEBY_1,
   DAI_RINKEBY_2,
   FEI_MAINNET,
-  ITokenProvider,
   USDC_ARBITRUM,
   USDC_ARBITRUM_GOERLI,
   USDC_BSC,
@@ -75,7 +74,6 @@ export type CandidatePoolsSelections = {
   topByBaseWithTokenIn: PoolId[];
   topByBaseWithTokenOut: PoolId[];
   topByDirectSwapPool: PoolId[];
-  topByEthQuoteTokenPool: PoolId[];
   topByTVL: PoolId[];
   topByTVLUsingTokenIn: PoolId[];
   topByTVLUsingTokenOut: PoolId[];
@@ -86,12 +84,9 @@ export type CandidatePoolsSelections = {
 export type RiverdexGetCandidatePoolsParams = {
   tokenIn: Token;
   tokenOut: Token;
-  routeType: TradeType;
   routingConfig: AlphaRouterConfig;
   riverexProvider: IRiverexProvider;
-  tokenProvider: ITokenProvider;
   poolProvider: IRiverexPoolProvider;
-  blockedTokenListProvider?: ITokenListProvider;
   chainId: ChainId;
 };
 
@@ -156,18 +151,15 @@ const baseTokensByChain: { [chainId in ChainId]?: Token[] } = {
 export async function getRiverdexCandidatePools({
   tokenIn,
   tokenOut,
-  routeType,
   routingConfig,
   riverexProvider,
-  tokenProvider,
   poolProvider,
-  blockedTokenListProvider,
   chainId,
 }: RiverdexGetCandidatePoolsParams): Promise<{
   poolAccessor: RiverexPoolAccessor;
   candidatePools: CandidatePoolsBySelectionCriteria;
   riverexPools: RiverexPool[];
-  riverexPoolsRaw: RawRiverexPool[];
+  riverexPoolsRawTokenWithUSD: RawRiverexPool[];
 }> {
   const {
     blockNumber,
@@ -188,11 +180,10 @@ export async function getRiverdexCandidatePools({
     blockNumber,
   });
 
-  // todo change fee
   const allPools = _.map(poolsSanitized, (pool) => {
     return {
       ...pool,
-      fee: pool.fee || '300',
+      fee: pool.fee,
       token0: {
         ...pool.token0,
         id: pool.token0.id.toLowerCase(),
@@ -210,25 +201,7 @@ export async function getRiverdexCandidatePools({
     MetricLoggerUnit.Milliseconds
   );
 
-  // Only consider pools where neither tokens are in the blocked token list.
-  let filteredPools: RiverexPool[] = allPools;
-  if (blockedTokenListProvider) {
-    filteredPools = [];
-    for (const pool of allPools) {
-      const token0InBlocklist =
-        await blockedTokenListProvider.getTokenByAddress(pool.token0.id);
-      const token1InBlocklist =
-        await blockedTokenListProvider.getTokenByAddress(pool.token1.id);
-
-      if (token0InBlocklist || token1InBlocklist) {
-        continue;
-      }
-
-      filteredPools.push(pool);
-    }
-  }
-
-  const riverexPoolsSorted = _(filteredPools)
+  const riverexPoolsSorted = _(allPools)
     .sortBy((tokenListPool) => -tokenListPool.reserve)
     .value();
 
@@ -285,78 +258,20 @@ export async function getRiverdexCandidatePools({
     .slice(0, topNWithBaseToken)
     .value();
 
-  // Always add the direct swap pool into the mix regardless of if it exists in the subgraph pool list.
-  // Ensures that new pools can be swapped on immediately, and that if a pool was filtered out of the
-  // subgraph query for some reason (e.g. trackedReserveETH was 0), then we still consider it.
-  let topByDirectSwapPool: RiverexPool[] = [];
+  // Always add the direct swap pool into the mix regardless of if it exists in the pool list.
 
-  // todo api call get direct pools or remove
-  // if (topNDirectSwaps != 0) {
-  //   const { token0, token1, poolAddress } = poolProvider.getPoolAddress(
-  //     tokenIn,
-  //     tokenOut,
-  //     "300"
-  //   );
-  //
-  //   topByDirectSwapPool = [
-  //     {
-  //       fee: "300",
-  //       id: poolAddress,
-  //       token0: {
-  //         id: token0.address,
-  //       },
-  //       token1: {
-  //         id: token1.address,
-  //       },
-  //       supply: 10000, // Not used. Set to arbitrary number.
-  //       reserve: 10000, // Not used. Set to arbitrary number.
-  //       reserveUSD: 10000, // Not used. Set to arbitrary number.
-  //     },
-  //   ];
-  // }
-  //
-  //  addToAddressSet(topByDirectSwapPool);
-
-  const wethAddress = WRAPPED_NATIVE_CURRENCY[chainId]!.address;
-
-  // Main reason we need this is for gas estimates, only needed if token out is not ETH.
-  // We don't check the seen address set because if we've already added pools for getting ETH quotes
-  // theres no need to add more.
-  // Note: we do not need to check other native currencies for the V2 Protocol
-  let topByEthQuoteTokenPool: RiverexPool[] = [];
-  if (
-    tokenOut.symbol != 'WETH' &&
-    tokenOut.symbol != 'WETH9' &&
-    tokenOut.symbol != 'ETH'
-  ) {
-    topByEthQuoteTokenPool = _(riverexPoolsSorted)
-      .filter((riverexPool) => {
-        if (routeType == TradeType.EXACT_INPUT) {
-          return (
-            (riverexPool.token0.id == wethAddress &&
-              riverexPool.token1.id == tokenOutAddress) ||
-            (riverexPool.token1.id == wethAddress &&
-              riverexPool.token0.id == tokenOutAddress)
-          );
-        } else {
-          return (
-            (riverexPool.token0.id == wethAddress &&
-              riverexPool.token1.id == tokenInAddress) ||
-            (riverexPool.token1.id == wethAddress &&
-              riverexPool.token0.id == tokenInAddress)
-          );
-        }
-      })
-      .slice(0, 1)
+  const topByDirectSwapPool = _(allPools)
+    .filter((pool) => {
+    return (pool.token0.id == tokenInAddress && pool.token1.id == tokenOutAddress) || (pool.token1.id == tokenInAddress && pool.token0.id == tokenOutAddress)
+    })
       .value();
-  }
 
-  addToAddressSet(topByEthQuoteTokenPool);
+  addToAddressSet(topByDirectSwapPool);
 
   const topByTVL = _(riverexPoolsSorted)
-    .filter((subgraphPool) => {
-      return !poolAddressesSoFar.has(subgraphPool.id);
-    })
+    .filter((pool) => {
+    return !poolAddressesSoFar.has(pool.id);
+  })
     .slice(0, topN)
     .value();
 
@@ -438,7 +353,6 @@ export async function getRiverdexCandidatePools({
     ...topByBaseWithTokenIn,
     ...topByBaseWithTokenOut,
     ...topByDirectSwapPool,
-    ...topByEthQuoteTokenPool,
     ...topByTVL,
     ...topByTVLUsingTokenIn,
     ...topByTVLUsingTokenOut,
@@ -449,89 +363,9 @@ export async function getRiverdexCandidatePools({
     .uniqBy((pool) => pool.id)
     .value();
 
-  const tokenAddresses = _(riverexPools)
-    .flatMap((riverexPool) => [riverexPool.token0.id, riverexPool.token1.id])
-    .compact()
-    .uniq()
-    .value();
-
-  await tokenProvider.setTokens(riverexPools);
-
-  log.info(
-    `Getting the ${tokenAddresses.length} tokens within the ${riverexPools.length} riverex pools we are considering`
-  );
-
-  const tokenAccessor = await tokenProvider.getTokens(tokenAddresses, {
-    blockNumber,
-  });
-
-  const printRiverexPool = (s: RiverexPool) =>
-    `${tokenAccessor.getTokenByAddress(s.token0.id)?.symbol ?? s.token0.id}/${
-      tokenAccessor.getTokenByAddress(s.token1.id)?.symbol ?? s.token1.id
-    }/${s.fee}`;
-
-  log.info(
-    {
-      topByBaseWithTokenIn: topByBaseWithTokenIn.map(printRiverexPool),
-      topByBaseWithTokenOut: topByBaseWithTokenOut.map(printRiverexPool),
-      topByTVL: topByTVL.map(printRiverexPool),
-      topByTVLUsingTokenIn: topByTVLUsingTokenIn.map(printRiverexPool),
-      topByTVLUsingTokenOut: topByTVLUsingTokenOut.map(printRiverexPool),
-      topByTVLUsingTokenInSecondHops:
-        topByTVLUsingTokenInSecondHops.map(printRiverexPool),
-      topByTVLUsingTokenOutSecondHops:
-        topByTVLUsingTokenOutSecondHops.map(printRiverexPool),
-      top2DirectSwap: topByDirectSwapPool.map(printRiverexPool),
-      top2EthQuotePool: topByEthQuoteTokenPool.map(printRiverexPool),
-    },
-    `Riverex Candidate pools`
-  );
-
-  const tokenPairsRaw = _.map<RiverexPool, [Token, Token, string] | undefined>(
-    riverexPools,
-    (riverexPool) => {
-      // const tokenA = tokenAccessor.getTokenByAddress(riverexPool.token0.id);
-      // const tokenB = tokenAccessor.getTokenByAddress(riverexPool.token1.id);
-
-      const tokenA = new Token(chainId,
-        riverexPool.firstToken.address,
-        riverexPool.firstToken.decimals,
-        riverexPool.firstToken.symbol);
-
-      const tokenB = new Token(chainId,
-        riverexPool.secondToken.address,
-        riverexPool.secondToken.decimals,
-        riverexPool.secondToken.symbol);
-
-      // constructor(chainId: number, address: string, decimals: number, symbol?: string, name?: string, bypassChecksum?: boolean);
-
-      let fee: string;
-      try {
-        fee = riverexPool.fee;
-      } catch (err) {
-        log.info(
-          { riverexPool },
-          `Dropping candidate pool for ${riverexPool.token0.id}/${riverexPool.token1.id}/${riverexPool.fee} because fee not supported`
-        );
-        return undefined;
-      }
-
-      if (!tokenA || !tokenB) {
-        log.info(
-          `Dropping candidate pool for ${riverexPool.token0.id}/${riverexPool.token1.id}/${riverexPool.fee}`
-        );
-        return undefined;
-      }
-
-      return [tokenA, tokenB, fee];
-    }
-  );
-
-  const tokenPairs = _.compact(tokenPairsRaw);
-
   const beforePoolsLoad = Date.now();
   // await poolProvider.setPools();
-  const poolAccessor = await poolProvider.getPools(tokenPairs, { blockNumber }, riverexPools);
+  const poolAccessor = await poolProvider.getPools(riverexPools);
 
   metric.putMetric(
     'RiverexPoolsLoad',
@@ -545,7 +379,6 @@ export async function getRiverdexCandidatePools({
       topByBaseWithTokenIn,
       topByBaseWithTokenOut,
       topByDirectSwapPool,
-      topByEthQuoteTokenPool: topByEthQuoteTokenPool,
       topByTVL,
       topByTVLUsingTokenIn,
       topByTVLUsingTokenOut,
@@ -554,5 +387,5 @@ export async function getRiverdexCandidatePools({
     },
   };
 
-  return { poolAccessor, candidatePools: poolsBySelection, riverexPools, riverexPoolsRaw: poolsRaw };
+  return { poolAccessor, candidatePools: poolsBySelection, riverexPools, riverexPoolsRawTokenWithUSD: poolsRaw };
 }

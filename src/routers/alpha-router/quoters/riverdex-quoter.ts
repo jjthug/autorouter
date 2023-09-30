@@ -1,12 +1,8 @@
 import { BigNumber } from '@ethersproject/bignumber';
-import { Currency, Token, TradeType } from '@uniswap/sdk-core';
+import {Token, TradeType } from '@uniswap/sdk-core';
 import _ from 'lodash';
 
 import {
-  ITokenListProvider,
-  ITokenProvider,
-  ITokenValidatorProvider,
-  TokenValidationResult,
   IRiverexQuoteProvider,
   IRiverexPoolProvider, RawRiverexPool
 } from '../../../providers';
@@ -39,12 +35,9 @@ export class RiverexQuoter extends BaseQuoter<RiverexRoute> {
     riverexPoolProvider: IRiverexPoolProvider,
     riverexQuoteProvider: IRiverexQuoteProvider,
     riverexGasModelFactory: IRiverexGasModelFactory,
-    tokenProvider: ITokenProvider,
     chainId: ChainId,
-    blockedTokenListProvider?: ITokenListProvider,
-    tokenValidatorProvider?: ITokenValidatorProvider
   ) {
-    super(tokenProvider, chainId, blockedTokenListProvider, tokenValidatorProvider);
+    super(chainId);
     this.riverexProvider = riverexProvider;
     this.riverexPoolProvider = riverexPoolProvider;
     this.riverexQuoteProvider = riverexQuoteProvider;
@@ -54,51 +47,20 @@ export class RiverexQuoter extends BaseQuoter<RiverexRoute> {
   protected async getRoutes(
     tokenIn: Token,
     tokenOut: Token,
-    tradeType: TradeType,
     routingConfig: AlphaRouterConfig
   ): Promise<GetRoutesResult<RiverexRoute>> {
     // Fetch all the pools that we will consider routing via. There are thousands
     // of pools, so we filter them to a set of candidate pools that we expect will
     // result in good prices.
-    const { poolAccessor, candidatePools , riverexPoolsRaw} = await getRiverdexCandidatePools({
+    const { poolAccessor, candidatePools , riverexPoolsRawTokenWithUSD} = await getRiverdexCandidatePools({
       tokenIn,
       tokenOut,
-      tokenProvider: this.tokenProvider,
-      blockedTokenListProvider: this.blockedTokenListProvider,
       poolProvider: this.riverexPoolProvider,
-      routeType: tradeType,
       riverexProvider: this.riverexProvider,
       routingConfig,
       chainId: this.chainId,
     });
-    const poolsRaw = poolAccessor.getAllPools();
-
-    // Drop any pools that contain tokens that can not be transferred according to the token validator.
-    const pools = await this.applyTokenValidatorToPools(
-      poolsRaw,
-      (
-        token: Currency,
-        tokenValidation: TokenValidationResult | undefined
-      ): boolean => {
-        // If there is no available validation result we assume the token is fine.
-        if (!tokenValidation) {
-          return false;
-        }
-
-        // Only filters out *intermediate* pools that involve tokens that we detect
-        // cant be transferred. This prevents us trying to route through tokens that may
-        // not be transferrable, but allows users to still swap those tokens if they
-        // specify.
-        if (
-          tokenValidation == TokenValidationResult.STF &&
-          (token.equals(tokenIn) || token.equals(tokenOut))
-        ) {
-          return false;
-        }
-
-        return tokenValidation == TokenValidationResult.STF;
-      }
-    );
+    const pools = poolAccessor.getAllPools();
 
     // Given all our candidate pools, compute all the possible ways to route from tokenIn to tokenOut.
     const { maxSwapsPerPath } = routingConfig;
@@ -111,7 +73,7 @@ export class RiverexQuoter extends BaseQuoter<RiverexRoute> {
 
     return {
       routes,
-      rawPools: riverexPoolsRaw,
+      rawPools: riverexPoolsRawTokenWithUSD,
       candidatePools,
     };
   }
@@ -126,7 +88,7 @@ export class RiverexQuoter extends BaseQuoter<RiverexRoute> {
     candidatePools?: CandidatePoolsBySelectionCriteria,
     _gasModel?: IGasModel<RiverexRouteWithValidQuote>,
     gasPriceWei?: BigNumber,
-    rawPools?: RawRiverexPool[]
+    _rawPools?: RawRiverexPool[]
   ): Promise<GetQuotesResult> {
     log.info('Starting to get Riverex quotes');
     if (gasPriceWei === undefined) {
@@ -152,9 +114,7 @@ export class RiverexQuoter extends BaseQuoter<RiverexRoute> {
     const riverexGasModel = await this.riverexGasModelFactory.buildGasModel({
       chainId: this.chainId,
       gasPriceWei,
-      poolProvider: this.riverexPoolProvider,
-      token: quoteToken,
-      rawPools: rawPools
+      token: quoteToken
     });
 
     metric.putMetric(
@@ -199,8 +159,7 @@ export class RiverexQuoter extends BaseQuoter<RiverexRoute> {
           percent,
           gasModel: riverexGasModel,
           quoteToken,
-          tradeType,
-          riverexPoolProvider: this.riverexPoolProvider,
+          tradeType
         });
 
         routesWithValidQuotes.push(routeWithValidQuote);

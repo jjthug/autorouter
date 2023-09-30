@@ -1,10 +1,8 @@
 import { Token } from '@uniswap/sdk-core';
 import _ from 'lodash';
 
-import { IERC20Metadata__factory } from '../types/v3/factories/IERC20Metadata__factory';
-import { ChainId, log, WRAPPED_NATIVE_CURRENCY } from '../util';
+import { ChainId, WRAPPED_NATIVE_CURRENCY } from '../util';
 
-import { IMulticallProvider } from './multicall-provider';
 import { ProviderConfig } from './provider';
 import { RiverexPool } from './riverdex/riverex-provider';
 
@@ -67,6 +65,16 @@ export const DAI_MAINNET = new Token(
   'DAI',
   'Dai Stablecoin'
 );
+
+export const DAI_MOONBASE_ALPHA = new Token(
+  ChainId.MOONBASE_ALPHA,
+  '0xD59A11C0Ac3E037e2FD98Bb741B1f6a6AbaBe772',
+  18,
+  'DAI',
+  'Dai Stablecoin'
+);
+
+
 export const FEI_MAINNET = new Token(
   ChainId.MAINNET,
   '0x956F47F50A910163D8BF957Cf5846D573E7f87CA',
@@ -153,6 +161,36 @@ export const WBTC_GÖRLI = new Token(
   8,
   'WBTC',
   'Wrapped BTC'
+);
+export const USDT_TRON = new Token(
+  ChainId.TRON,
+  '0xa614f803b6fd780986a42c78ec9c7f77e6ded13c',
+  6,
+  'USDT',
+  'Tether USD'
+);
+export const USDD_TRON_SHASTA = new Token(
+  ChainId.TRON_SHASTA,
+  '0xd4a4b0bc1d69cdeb238e8604ead1b03ac0ed7c76',
+  18,
+  'USDD',
+  'USDD'
+);
+
+export const USDT_FANTOM = new Token(
+  ChainId.FANTOM,
+  '0x049d68029688eAbF473097a2fC38ef61633A3C7A',
+  6,
+  'fUSDT',
+  'Frapped USDT'
+);
+
+export const USDC_TRON = new Token(
+  ChainId.TRON,
+  '0x3487b63d30b5b2c87fb7ffa8bcfade38eaac1abe',
+  6,
+  'USDC',
+  'USD Coin'
 );
 export const DAI_GÖRLI = new Token(
   ChainId.GÖRLI,
@@ -333,7 +371,7 @@ export const DAI_ARBITRUM_RINKEBY = new Token(
 
 export const DAI_ARBITRUM_GOERLI = new Token(
   ChainId.ARBITRUM_GOERLI,
-  '0x0000000000000000000000000000000000000000', // TODO: add address
+  '0x0000000000000000000000000000000000000000',
   18,
   'DAI',
   'Dai Stablecoin'
@@ -487,6 +525,23 @@ export const USDT_BSC = new Token(
   'USDT'
 );
 
+export const USDT_BSC_TESTNET = new Token(
+  ChainId.BSC_TESTNET,
+  '0x64544969ed7EBf5f083679233325356EbE738930',
+  18,
+  'USDC',
+  'USDC Token'
+);
+
+
+export const DAI_BSC_TESTNET = new Token(
+  ChainId.BSC_TESTNET,
+  '0xEC5dCb5Dbf4B114C9d0F65BcCAb49EC54F6A0867',
+  18,
+  'DAI',
+  'DAI Token'
+);
+
 // Celo Tokens
 export const CELO = new Token(
   ChainId.CELO,
@@ -609,106 +664,6 @@ export const WBTC_MOONBEAM = new Token(
   'WBTC',
   'Wrapped BTC bridged using Multichain'
 );
-
-export class TokenProvider implements ITokenProvider {
-  constructor(
-    private chainId: ChainId,
-    protected multicall2Provider: IMulticallProvider
-  ) {}
-
-
-  public async setTokens(){
-  }
-  public async getTokens(
-    _addresses: string[],
-    providerConfig?: ProviderConfig
-  ): Promise<TokenAccessor> {
-    const addressToToken: { [address: string]: Token } = {};
-    const symbolToToken: { [symbol: string]: Token } = {};
-
-    const addresses = _(_addresses)
-      .map((address) => address.toLowerCase())
-      .uniq()
-      .value();
-
-    if (addresses.length > 0) {
-      const [symbolsResult, decimalsResult] = await Promise.all([
-        this.multicall2Provider.callSameFunctionOnMultipleContracts<
-          undefined,
-          [string]
-        >({
-          addresses,
-          contractInterface: IERC20Metadata__factory.createInterface(),
-          functionName: 'symbol',
-          providerConfig,
-        }),
-        this.multicall2Provider.callSameFunctionOnMultipleContracts<
-          undefined,
-          [number]
-        >({
-          addresses,
-          contractInterface: IERC20Metadata__factory.createInterface(),
-          functionName: 'decimals',
-          providerConfig,
-        }),
-      ]);
-
-      const { results: symbols } = symbolsResult;
-      const { results: decimals } = decimalsResult;
-
-      for (let i = 0; i < addresses.length; i++) {
-        const address = addresses[i]!;
-
-        const symbolResult = symbols[i];
-        const decimalResult = decimals[i];
-
-        if (!symbolResult?.success || !decimalResult?.success) {
-          log.info(
-            {
-              symbolResult,
-              decimalResult,
-            },
-            `Dropping token with address ${address} as symbol or decimal are invalid`
-          );
-          continue;
-        }
-
-        const symbol = symbolResult.result[0]!;
-        const decimal = decimalResult.result[0]!;
-
-        addressToToken[address.toLowerCase()] = new Token(
-          this.chainId,
-          address,
-          decimal,
-          symbol
-        );
-        symbolToToken[symbol.toLowerCase()] =
-          addressToToken[address.toLowerCase()]!;
-      }
-
-      log.info(
-        `Got token symbol and decimals for ${
-          Object.values(addressToToken).length
-        } out of ${addresses.length} tokens on-chain ${
-          providerConfig ? `as of: ${providerConfig?.blockNumber}` : ''
-        }`
-      );
-    }
-
-    return {
-      getTokenByAddress: (address: string): Token | undefined => {
-        return addressToToken[address.toLowerCase()];
-      },
-      getTokenBySymbol: (symbol: string): Token | undefined => {
-        return symbolToToken[symbol.toLowerCase()];
-      },
-      getAllTokens: (): Token[] => {
-        return Object.values(addressToToken);
-      },
-    };
-  }
-
-}
 
 export const DAI_ON = (chainId: ChainId): Token => {
   switch (chainId) {

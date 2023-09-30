@@ -1,190 +1,38 @@
 import { BigNumber } from '@ethersproject/bignumber';
-import { BaseProvider, JsonRpcProvider } from '@ethersproject/providers';
-import DEFAULT_TOKEN_LIST from '@uniswap/default-token-list';
-import { SwapRouter, Trade } from '@uniswap/router-sdk';
 import { Currency, Fraction, Token, TradeType } from '@uniswap/sdk-core';
-import { TokenList } from '@uniswap/token-lists';
-import { Pool, Position, SqrtPriceMath, TickMath } from '@uniswap/v3-sdk';
-import retry from 'async-retry';
-import JSBI from 'jsbi';
 import _ from 'lodash';
-import NodeCache from 'node-cache';
 
-import {
-  CachingGasStationProvider,
-  CachingRiverexPoolProvider,
-  CachingTokenProviderWithFallback,
-  EIP1559GasPriceProvider,
-  ETHGasStationInfoProvider,
-  IOnChainQuoteProvider,
-  IRouteCachingProvider,
-  ISwapRouterProvider,
-  // IV2QuoteProvider,
-  // IV2SubgraphProvider,
-  LegacyGasPriceProvider,
-  NodeJSCache,
-  OnChainGasPriceProvider,
-  OnChainQuoteProvider,
-  RiverexPoolProvider, RiverexProvider,
-  RiverexQuoteProvider,
-  Simulator,
-  SwapRouterProvider,
-  UniswapMulticallProvider,
-} from '../../providers';
-import { CachingTokenListProvider, ITokenListProvider } from '../../providers/caching-token-list-provider';
-import { GasPrice, IGasPriceProvider } from '../../providers/gas-price-provider';
-import { ITokenProvider, TokenProvider } from '../../providers/token-provider';
-import { ITokenValidatorProvider, TokenValidatorProvider } from '../../providers/token-validator-provider';
-import { IV2PoolProvider } from '../../providers/v2/pool-provider';
-import {
-  ArbitrumGasData,
-  ArbitrumGasDataProvider,
-  IL2GasDataProvider,
-  OptimismGasData,
-  OptimismGasDataProvider
-} from '../../providers/v3/gas-data-provider';
-import { IV3PoolProvider } from '../../providers/v3/pool-provider';
-import { Erc20__factory } from '../../types/other/factories/Erc20__factory';
+import { RiverexPoolProvider, RiverexProvider, RiverexQuoteProvider } from '../../providers';
 import { CurrencyAmount } from '../../util/amounts';
 import { ChainId } from '../../util/chains';
 import { log } from '../../util/log';
-import { buildSwapMethodParameters, buildTrade } from '../../util/methodParameters';
+import { buildSwapMethodParameters } from '../../util/methodParameters';
 import { metric, MetricLoggerUnit } from '../../util/metric';
-import { UNSUPPORTED_TOKENS } from '../../util/unsupported-tokens';
-import {
-  IRouter,
-  ISwapToRatio,
-  MethodParameters,
-  SwapAndAddConfig,
-  SwapAndAddOptions,
-  SwapAndAddParameters,
-  SwapOptions,
-  SwapRoute,
-  SwapToRatioResponse,
-  SwapToRatioStatus
-} from '../router';
+import { IRouter, MethodParameters, RiverexRoute, SwapOptions, SwapRoute } from '../router';
 
-import { DEFAULT_ROUTING_CONFIG_BY_CHAIN, ETH_GAS_STATION_API_URL } from './config';
-import {
-  RouteWithValidQuote,
-  V3RouteWithValidQuote
-} from './entities/route-with-valid-quote';
+import { DEFAULT_ROUTING_CONFIG_BY_CHAIN } from './config';
+import { RouteWithValidQuote } from './entities/route-with-valid-quote';
 import { BestSwapRoute, getBestSwapRoute } from './functions/best-swap-route';
-import { calculateRatioAmountIn } from './functions/calculate-ratio-amount-in';
-import { CandidatePoolsBySelectionCriteria, PoolId } from './functions/get-candidate-pools';
-import {
-  IOnChainGasModelFactory,
-  IRiverexGasModelFactory,
-  IV2GasModelFactory
-} from './gas-models/gas-model';
+import { CandidatePoolsBySelectionCriteria } from './functions/get-candidate-pools';
+import { IRiverexGasModelFactory } from './gas-models/gas-model';
 import { GetQuotesResult } from './quoters';
 import { RiverexQuoter } from './quoters/riverdex-quoter';
 import { IRiverexProvider } from '../../providers/riverdex/riverex-provider';
 import { IRiverexPoolProvider } from '../../providers/riverdex/pool-provider';
 import { IRiverexQuoteProvider } from '../../providers/riverdex/quote-provider';
-import { RiverexProviderWithFallBacks } from '../../providers/riverdex/riverex-provider-with-fallback';
-import { CachingRiverexProvider } from '../../providers/riverdex/caching-riverex-provider';
 import { RiverexHeuristicGasModelFactory } from './gas-models/riverex/riverex-heuristic-gas-model';
-import { Protocol, SWAP_ROUTER_02_ADDRESSES } from '../../util';
+import { Protocol } from '../../util';
+import axios from 'axios';
+import { isTronChain } from '../../util/checkTron';
+import Timeout from 'await-timeout';
+import { TIMEOUT } from '../../util/timeout_values';
+const { fromHex } = require('tron-format-address')
 
 export type AlphaRouterParams = {
   /**
    * The chain id for this instance of the Alpha Router.
    */
   chainId: ChainId;
-  /**
-   * The Web3 provider for getting on-chain data.
-   */
-  provider: BaseProvider;
-  /**
-   * The provider to use for making multicalls. Used for getting on-chain data
-   * like pools, tokens, quotes in batch.
-   */
-  multicall2Provider?: UniswapMulticallProvider;
-  /**
-   * The provider for getting all pools that exist on V3 from the Subgraph. The pools
-   * from this provider are filtered during the algorithm to a set of candidate pools.
-   */
-  /**
-   * The provider for getting data about V3 pools.
-   */
-  v3PoolProvider?: IV3PoolProvider;
-  /**
-   * The provider for getting V3 quotes.
-   */
-  onChainQuoteProvider?: IOnChainQuoteProvider;
-  /**
-   * The provider for getting all pools that exist on V2 from the Subgraph. The pools
-   * from this provider are filtered during the algorithm to a set of candidate pools.
-   */
-  /**
-   * The provider for getting data about V2 pools.
-   */
-  v2PoolProvider?: IV2PoolProvider;
-  /**
-   * The provider for getting V3 quotes.
-   */
-  /**
-   * The provider for getting data about Tokens.
-   */
-  tokenProvider?: ITokenProvider;
-  /**
-   * The provider for getting the current gas price to use when account for gas in the
-   * algorithm.
-   */
-  gasPriceProvider?: IGasPriceProvider;
-  /**
-   * A factory for generating a gas model that is used when estimating the gas used by
-   * V3 routes.
-   */
-  v3GasModelFactory?: IOnChainGasModelFactory;
-  /**
-   * A factory for generating a gas model that is used when estimating the gas used by
-   * V2 routes.
-   */
-  v2GasModelFactory?: IV2GasModelFactory;
-  /**
-   * A factory for generating a gas model that is used when estimating the gas used by
-   * V3 routes.
-   */
-  mixedRouteGasModelFactory?: IOnChainGasModelFactory;
-  /**
-   * A token list that specifies Token that should be blocked from routing through.
-   * Defaults to Uniswap's unsupported token list.
-   */
-  blockedTokenListProvider?: ITokenListProvider;
-
-  /**
-   * Calls lens function on SwapRouter02 to determine ERC20 approval types for
-   * LP position tokens.
-   */
-  swapRouterProvider?: ISwapRouterProvider;
-
-  /**
-   * Calls the optimism gas oracle contract to fetch constants for calculating the l1 security fee.
-   */
-  optimismGasDataProvider?: IL2GasDataProvider<OptimismGasData>;
-
-  /**
-   * A token validator for detecting fee-on-transfer tokens or tokens that can't be transferred.
-   */
-  tokenValidatorProvider?: ITokenValidatorProvider;
-
-  /**
-   * Calls the arbitrum gas data contract to fetch constants for calculating the l1 fee.
-   */
-  arbitrumGasDataProvider?: IL2GasDataProvider<ArbitrumGasData>;
-
-  /**
-   * Simulates swaps and returns new SwapRoute with updated gas estimates.
-   */
-  simulator?: Simulator;
-
-  /**
-   * A provider for caching the best route given an amount, quoteToken, tradeType
-   */
-  routeCachingProvider?: IRouteCachingProvider;
-
   riverexProvider?: IRiverexProvider;
   riverexPoolProvider?: IRiverexPoolProvider;
   riverexQuoteProvider?: IRiverexQuoteProvider;
@@ -310,23 +158,9 @@ export type AlphaRouterConfig = {
 };
 
 export class AlphaRouter
-  implements IRouter<AlphaRouterConfig>,
-    ISwapToRatio<AlphaRouterConfig, SwapAndAddConfig> {
+  implements IRouter<AlphaRouterConfig> {
   protected chainId: ChainId;
-  protected provider: BaseProvider;
-  protected multicall2Provider: UniswapMulticallProvider;
-  protected onChainQuoteProvider: IOnChainQuoteProvider;
-  protected tokenProvider: ITokenProvider;
-  protected gasPriceProvider: IGasPriceProvider;
-  protected swapRouterProvider: ISwapRouterProvider;
-  protected tokenValidatorProvider?: ITokenValidatorProvider;
-  protected blockedTokenListProvider?: ITokenListProvider;
-  protected l2GasDataProvider?:
-    | IL2GasDataProvider<OptimismGasData>
-    | IL2GasDataProvider<ArbitrumGasData>;
-  protected simulator?: Simulator;
   protected riverexQuoter: RiverexQuoter;
-  protected routeCachingProvider?: IRouteCachingProvider;
   protected riverexProvider: IRiverexProvider;
   protected riverexPoolProvider: IRiverexPoolProvider;
   protected riverexQuoteProvider: IRiverexQuoteProvider;
@@ -334,244 +168,30 @@ export class AlphaRouter
 
   constructor({
     chainId,
-    provider,
-    multicall2Provider,
-    onChainQuoteProvider,
-    tokenProvider,
-    blockedTokenListProvider,
-    gasPriceProvider,
-    swapRouterProvider,
-    optimismGasDataProvider,
-    tokenValidatorProvider,
-    arbitrumGasDataProvider,
-    simulator,
-    routeCachingProvider,
     riverexProvider,
     riverexPoolProvider,
     riverexQuoteProvider,
     riverexGasModelFactory,
   }: AlphaRouterParams) {
     this.chainId = chainId;
-    this.provider = provider;
-    this.multicall2Provider =
-      multicall2Provider ??
-      new UniswapMulticallProvider(chainId, provider, 375_000);
-
-    this.simulator = simulator;
-    this.routeCachingProvider = routeCachingProvider;
-
-    if (onChainQuoteProvider) {
-      this.onChainQuoteProvider = onChainQuoteProvider;
-    } else {
-      switch (chainId) {
-        case ChainId.OPTIMISM:
-        case ChainId.OPTIMISM_GOERLI:
-        case ChainId.OPTIMISTIC_KOVAN:
-          this.onChainQuoteProvider = new OnChainQuoteProvider(
-            chainId,
-            provider,
-            this.multicall2Provider,
-            {
-              retries: 2,
-              minTimeout: 100,
-              maxTimeout: 1000,
-            },
-            {
-              multicallChunk: 110,
-              gasLimitPerCall: 1_200_000,
-              quoteMinSuccessRate: 0.1,
-            },
-            {
-              gasLimitOverride: 3_000_000,
-              multicallChunk: 45,
-            },
-            {
-              gasLimitOverride: 3_000_000,
-              multicallChunk: 45,
-            },
-            {
-              baseBlockOffset: -10,
-              rollback: {
-                enabled: true,
-                attemptsBeforeRollback: 1,
-                rollbackBlockOffset: -10,
-              },
-            }
-          );
-          break;
-        case ChainId.ARBITRUM_ONE:
-        case ChainId.ARBITRUM_RINKEBY:
-        case ChainId.ARBITRUM_GOERLI:
-          this.onChainQuoteProvider = new OnChainQuoteProvider(
-            chainId,
-            provider,
-            this.multicall2Provider,
-            {
-              retries: 2,
-              minTimeout: 100,
-              maxTimeout: 1000,
-            },
-            {
-              multicallChunk: 10,
-              gasLimitPerCall: 12_000_000,
-              quoteMinSuccessRate: 0.1,
-            },
-            {
-              gasLimitOverride: 30_000_000,
-              multicallChunk: 6,
-            },
-            {
-              gasLimitOverride: 30_000_000,
-              multicallChunk: 6,
-            }
-          );
-          break;
-        case ChainId.CELO:
-        case ChainId.CELO_ALFAJORES:
-          this.onChainQuoteProvider = new OnChainQuoteProvider(
-            chainId,
-            provider,
-            this.multicall2Provider,
-            {
-              retries: 2,
-              minTimeout: 100,
-              maxTimeout: 1000,
-            },
-            {
-              multicallChunk: 10,
-              gasLimitPerCall: 5_000_000,
-              quoteMinSuccessRate: 0.1,
-            },
-            {
-              gasLimitOverride: 5_000_000,
-              multicallChunk: 5,
-            },
-            {
-              gasLimitOverride: 6_250_000,
-              multicallChunk: 4,
-            }
-          );
-          break;
-        default:
-          this.onChainQuoteProvider = new OnChainQuoteProvider(
-            chainId,
-            provider,
-            this.multicall2Provider,
-            {
-              retries: 2,
-              minTimeout: 100,
-              maxTimeout: 1000,
-            },
-            {
-              multicallChunk: 210,
-              gasLimitPerCall: 705_000,
-              quoteMinSuccessRate: 0.15,
-            },
-            {
-              gasLimitOverride: 2_000_000,
-              multicallChunk: 70,
-            }
-          );
-          break;
-      }
-    }
 
     this.riverexPoolProvider =
       riverexPoolProvider ??
-      new CachingRiverexPoolProvider(
-        chainId,
-        new RiverexPoolProvider(chainId, this.multicall2Provider),
-      );
+      new RiverexPoolProvider(chainId);
 
     this.riverexQuoteProvider = riverexQuoteProvider ?? new RiverexQuoteProvider();
-
-    this.blockedTokenListProvider =
-      blockedTokenListProvider ??
-      new CachingTokenListProvider(
-        chainId,
-        UNSUPPORTED_TOKENS as TokenList,
-        new NodeJSCache(new NodeCache({ stdTTL: 3600, useClones: false }))
-      );
-    this.tokenProvider =
-      tokenProvider ??
-      new CachingTokenProviderWithFallback(
-        chainId,
-        new NodeJSCache(new NodeCache({ stdTTL: 3600, useClones: false })),
-        new CachingTokenListProvider(
-          chainId,
-          DEFAULT_TOKEN_LIST,
-          new NodeJSCache(new NodeCache({ stdTTL: 3600, useClones: false }))
-        ),
-        new TokenProvider(chainId, this.multicall2Provider)
-      );
-
 
     if (riverexProvider) {
       this.riverexProvider = riverexProvider;
     } else {
-      this.riverexProvider = new RiverexProviderWithFallBacks([
-        new CachingRiverexProvider(
-          chainId,
-          new RiverexProvider(
-            chainId
-          ),
-          new NodeJSCache(new NodeCache({ stdTTL: 300, useClones: false }))
-        )
-        // todo check if need static provider later
-        // new StaticRiverexProvider(chainId),
-      ]);
+      this.riverexProvider = new RiverexProvider(
+        chainId
+      );
     }
 
-    let gasPriceProviderInstance: IGasPriceProvider;
-    if (JsonRpcProvider.isProvider(this.provider)) {
-      gasPriceProviderInstance = new OnChainGasPriceProvider(
-        chainId,
-        new EIP1559GasPriceProvider(this.provider as JsonRpcProvider),
-        new LegacyGasPriceProvider(this.provider as JsonRpcProvider)
-      );
-    } else {
-      gasPriceProviderInstance = new ETHGasStationInfoProvider(ETH_GAS_STATION_API_URL);
-    }
-
-    this.gasPriceProvider =
-      gasPriceProvider ??
-      new CachingGasStationProvider(
-        chainId,
-        gasPriceProviderInstance,
-        new NodeJSCache<GasPrice>(
-          new NodeCache({ stdTTL: 15, useClones: false })
-        )
-      );
     this.riverexGasModelFactory =
       riverexGasModelFactory ?? new RiverexHeuristicGasModelFactory();
 
-    this.swapRouterProvider =
-      swapRouterProvider ??
-      new SwapRouterProvider(this.multicall2Provider, this.chainId);
-
-    if (chainId === ChainId.OPTIMISM || chainId === ChainId.OPTIMISTIC_KOVAN) {
-      this.l2GasDataProvider =
-        optimismGasDataProvider ??
-        new OptimismGasDataProvider(chainId, this.multicall2Provider);
-    }
-    if (
-      chainId === ChainId.ARBITRUM_ONE ||
-      chainId === ChainId.ARBITRUM_RINKEBY ||
-      chainId === ChainId.ARBITRUM_GOERLI
-    ) {
-      this.l2GasDataProvider =
-        arbitrumGasDataProvider ??
-        new ArbitrumGasDataProvider(chainId, this.provider);
-    }
-    if (tokenValidatorProvider) {
-      this.tokenValidatorProvider = tokenValidatorProvider;
-    } else if (this.chainId === ChainId.MAINNET) {
-      this.tokenValidatorProvider = new TokenValidatorProvider(
-        this.chainId,
-        this.multicall2Provider,
-        new NodeJSCache(new NodeCache({ stdTTL: 30000, useClones: false }))
-      );
-    }
 
     // Initialize the Quoters.
     // Quoters are an abstraction encapsulating the business logic of fetching routes and quotes.
@@ -581,215 +201,24 @@ export class AlphaRouter
       this.riverexPoolProvider,
       this.riverexQuoteProvider,
       this.riverexGasModelFactory,
-      this.tokenProvider,
       this.chainId,
-      this.blockedTokenListProvider,
-      this.tokenValidatorProvider
     );
-  }
-
-  public async routeToRatio(
-    token0Balance: CurrencyAmount,
-    token1Balance: CurrencyAmount,
-    position: Position,
-    swapAndAddConfig: SwapAndAddConfig,
-    swapAndAddOptions?: SwapAndAddOptions,
-    routingConfig: Partial<AlphaRouterConfig> = DEFAULT_ROUTING_CONFIG_BY_CHAIN(
-      this.chainId
-    )
-  ): Promise<SwapToRatioResponse> {
-    if (
-      token1Balance.currency.wrapped.sortsBefore(token0Balance.currency.wrapped)
-    ) {
-      [token0Balance, token1Balance] = [token1Balance, token0Balance];
-    }
-
-    let preSwapOptimalRatio = this.calculateOptimalRatio(
-      position,
-      position.pool.sqrtRatioX96,
-      true
-    );
-    // set up parameters according to which token will be swapped
-    let zeroForOne: boolean;
-    if (position.pool.tickCurrent > position.tickUpper) {
-      zeroForOne = true;
-    } else if (position.pool.tickCurrent < position.tickLower) {
-      zeroForOne = false;
-    } else {
-      zeroForOne = new Fraction(
-        token0Balance.quotient,
-        token1Balance.quotient
-      ).greaterThan(preSwapOptimalRatio);
-      if (!zeroForOne) preSwapOptimalRatio = preSwapOptimalRatio.invert();
-    }
-
-    const [inputBalance, outputBalance] = zeroForOne
-      ? [token0Balance, token1Balance]
-      : [token1Balance, token0Balance];
-
-    let optimalRatio = preSwapOptimalRatio;
-    let postSwapTargetPool = position.pool;
-    let exchangeRate: Fraction = zeroForOne
-      ? position.pool.token0Price
-      : position.pool.token1Price;
-    let swap: SwapRoute | null = null;
-    let ratioAchieved = false;
-    let n = 0;
-    // iterate until we find a swap with a sufficient ratio or return null
-    while (!ratioAchieved) {
-      n++;
-      if (n > swapAndAddConfig.maxIterations) {
-        log.info('max iterations exceeded');
-        return {
-          status: SwapToRatioStatus.NO_ROUTE_FOUND,
-          error: 'max iterations exceeded',
-        };
-      }
-
-      const amountToSwap = calculateRatioAmountIn(
-        optimalRatio,
-        exchangeRate,
-        inputBalance,
-        outputBalance
-      );
-      if (amountToSwap.equalTo(0)) {
-        log.info(`no swap needed: amountToSwap = 0`);
-        return {
-          status: SwapToRatioStatus.NO_SWAP_NEEDED,
-        };
-      }
-      swap = await this.route(
-        amountToSwap,
-        outputBalance.currency,
-        TradeType.EXACT_INPUT,
-        undefined,
-        {
-          ...DEFAULT_ROUTING_CONFIG_BY_CHAIN(this.chainId),
-          ...routingConfig,
-          /// @dev We do not want to query for mixedRoutes for routeToRatio as they are not supported
-          /// [Protocol.V3, Protocol.V2] will make sure we only query for V3 and V2
-          protocols: [Protocol.V3, Protocol.V2],
-        }
-      );
-      if (!swap) {
-        log.info('no route found from this.route()');
-        return {
-          status: SwapToRatioStatus.NO_ROUTE_FOUND,
-          error: 'no route found',
-        };
-      }
-
-      const inputBalanceUpdated = inputBalance.subtract(
-        swap.trade!.inputAmount
-      );
-      const outputBalanceUpdated = outputBalance.add(swap.trade!.outputAmount);
-      const newRatio = inputBalanceUpdated.divide(outputBalanceUpdated);
-
-      let targetPoolPriceUpdate;
-      swap.route.forEach((route) => {
-        if (route.protocol === Protocol.V3) {
-          const v3Route = route as V3RouteWithValidQuote;
-          v3Route.route.pools.forEach((pool, i) => {
-            if (
-              pool.token0.equals(position.pool.token0) &&
-              pool.token1.equals(position.pool.token1) &&
-              pool.fee === position.pool.fee
-            ) {
-              targetPoolPriceUpdate = JSBI.BigInt(
-                v3Route.sqrtPriceX96AfterList[i]!.toString()
-              );
-              optimalRatio = this.calculateOptimalRatio(
-                position,
-                JSBI.BigInt(targetPoolPriceUpdate!.toString()),
-                zeroForOne
-              );
-            }
-          });
-        }
-      });
-      if (!targetPoolPriceUpdate) {
-        optimalRatio = preSwapOptimalRatio;
-      }
-      ratioAchieved =
-        newRatio.equalTo(optimalRatio) ||
-        this.absoluteValue(
-          newRatio.asFraction.divide(optimalRatio).subtract(1)
-        ).lessThan(swapAndAddConfig.ratioErrorTolerance);
-
-      if (ratioAchieved && targetPoolPriceUpdate) {
-        postSwapTargetPool = new Pool(
-          position.pool.token0,
-          position.pool.token1,
-          position.pool.fee,
-          targetPoolPriceUpdate,
-          position.pool.liquidity,
-          TickMath.getTickAtSqrtRatio(targetPoolPriceUpdate),
-          position.pool.tickDataProvider
-        );
-      }
-      exchangeRate = swap.trade!.outputAmount.divide(swap.trade!.inputAmount);
-
-      log.info(
-        {
-          exchangeRate: exchangeRate.asFraction.toFixed(18),
-          optimalRatio: optimalRatio.asFraction.toFixed(18),
-          newRatio: newRatio.asFraction.toFixed(18),
-          inputBalanceUpdated: inputBalanceUpdated.asFraction.toFixed(18),
-          outputBalanceUpdated: outputBalanceUpdated.asFraction.toFixed(18),
-          ratioErrorTolerance: swapAndAddConfig.ratioErrorTolerance.toFixed(18),
-          iterationN: n.toString(),
-        },
-        'QuoteToRatio Iteration Parameters'
-      );
-
-      if (exchangeRate.equalTo(0)) {
-        log.info('exchangeRate to 0');
-        return {
-          status: SwapToRatioStatus.NO_ROUTE_FOUND,
-          error: 'insufficient liquidity to swap to optimal ratio',
-        };
-      }
-    }
-
-    if (!swap) {
-      return {
-        status: SwapToRatioStatus.NO_ROUTE_FOUND,
-        error: 'no route found',
-      };
-    }
-    let methodParameters: MethodParameters | undefined;
-    if (swapAndAddOptions) {
-      methodParameters = await this.buildSwapAndAddMethodParameters(
-        swap.trade!,
-        swapAndAddOptions,
-        {
-          initialBalanceTokenIn: inputBalance,
-          initialBalanceTokenOut: outputBalance,
-          preLiquidityPosition: position,
-        }
-      );
-    }
-
-    return {
-      status: SwapToRatioStatus.SUCCESS,
-      result: { ...swap, methodParameters, optimalRatio, postSwapTargetPool },
-    };
   }
 
   /**
    * @inheritdoc IRouter
    */
   public async route(
-    amount: CurrencyAmount,
-    quoteCurrency: Currency,
-    tradeType: TradeType,
-    swapConfig?: SwapOptions,
-    partialRoutingConfig: Partial<AlphaRouterConfig> = {}
+      amount: CurrencyAmount,
+      quoteCurrency: Currency,
+      tradeType: TradeType,
+      swapConfig?: SwapOptions,
+      partialRoutingConfig: Partial<AlphaRouterConfig> = {}
   ): Promise<SwapRoute | null> {
-    const { currencyIn, currencyOut } = this.determineCurrencyInOutFromTradeType(tradeType, amount, quoteCurrency);
+      const { currencyIn, currencyOut } = this.determineCurrencyInOutFromTradeType(tradeType, amount, quoteCurrency);
 
-    const tokenIn = currencyIn.wrapped;
-    const tokenOut = currencyOut.wrapped;
+      const tokenIn = currencyIn.wrapped;
+      const tokenOut = currencyOut.wrapped;
 
     metric.setProperty('chainId', this.chainId);
     metric.setProperty('pair', `${tokenIn.symbol}/${tokenOut.symbol}`);
@@ -803,29 +232,20 @@ export class AlphaRouter
       MetricLoggerUnit.Count
     );
 
-    // Get a block number to specify in all our calls. Ensures data we fetch from chain is
-    // from the same block.
-    const blockNumber = partialRoutingConfig.blockNumber ?? this.getBlockNumberPromise();
-
     const routingConfig: AlphaRouterConfig = _.merge(
       {},
       DEFAULT_ROUTING_CONFIG_BY_CHAIN(this.chainId),
-      partialRoutingConfig,
-      { blockNumber }
+      partialRoutingConfig
     );
 
-
-    // todo from api
     const gasPriceWei = await this.getGasPriceWei();
-
     const quoteToken = quoteCurrency.wrapped;
 
     // Create a Set to sanitize the protocols input, a Set of undefined becomes an empty set,
     // Then create an Array from the values of that Set.
     const protocols: Protocol[] = Array.from(new Set(routingConfig.protocols).values());
 
-    let swapRouteFromChainPromise: Promise<BestSwapRoute | null> = Promise.resolve(null);
-    swapRouteFromChainPromise = this.getSwapRouteFromChain(
+    const swapRouteFromChain = await this.getSwapRouteFromChain(
       amount,
       tokenIn,
       tokenOut,
@@ -835,10 +255,6 @@ export class AlphaRouter
       routingConfig,
       gasPriceWei
     );
-
-    const [swapRouteFromChain] = await Promise.all([
-      swapRouteFromChainPromise
-    ]);
 
     let swapRouteRaw: BestSwapRoute | null;
     swapRouteRaw = swapRouteFromChain;
@@ -865,14 +281,6 @@ export class AlphaRouter
     // Build Trade object that represents the optimal swap.
 
     let trade;
-    if(!(protocols.length == 1 && protocols[0] == Protocol.RIVERDEX)) {
-      trade = buildTrade<typeof tradeType>(
-        currencyIn,
-        currencyOut,
-        tradeType,
-        routeAmounts
-      );
-    }
 
     let methodParameters: MethodParameters | undefined;
 
@@ -886,7 +294,7 @@ export class AlphaRouter
       );
     }
 
-    const swapRoute: SwapRoute = {
+    let swapRoute: SwapRoute = {
       quote,
       quoteGasAdjusted,
       estimatedGasUsed,
@@ -894,44 +302,32 @@ export class AlphaRouter
       estimatedGasUsedUSD,
       gasPriceWei,
       route: routeAmounts,
-      trade,
+      tradeType,
       methodParameters,
-      blockNumber: BigNumber.from(await blockNumber),
     };
 
-    if (
-      swapConfig &&
-      swapConfig.simulate &&
-      methodParameters &&
-      methodParameters.calldata
-    ) {
-      if (!this.simulator) {
-        throw new Error('Simulator not initialized!');
-      }
-      log.info({ swapConfig, methodParameters }, 'Starting simulation');
-      const fromAddress = swapConfig.simulate.fromAddress;
-      const beforeSimulate = Date.now();
-      const swapRouteWithSimulation = await this.simulator.simulate(
-        fromAddress,
-        swapConfig,
-        swapRoute,
-        amount,
-        // Quote will be in WETH even if quoteCurrency is ETH
-        // So we init a new CurrencyAmount object here
-        CurrencyAmount.fromRawAmount(quoteCurrency, quote.quotient.toString()),
-        this.l2GasDataProvider
-          ? await this.l2GasDataProvider!.getGasData()
-          : undefined,
-        { blockNumber }
-      );
-      metric.putMetric(
-        'SimulateTransaction',
-        Date.now() - beforeSimulate,
-        MetricLoggerUnit.Milliseconds
-      );
-      return swapRouteWithSimulation;
+    // if tron chain, change all addresses to base58
+    if(isTronChain(this.chainId)) {
+      swapRoute.route = swapRoute.route.map(rout => {
+        return ({ ...rout, route: (
+            ({
+                ...rout.route,
+                path: rout.route.path.map(path => ({ ...path, address: fromHex(path.address) })),
+                pairs: rout.route.pairs.map(pair => ({ ...pair, address: fromHex(pair.address) })),
+                input:{...rout.route.input, address: fromHex(rout.route.input.address)},
+                output:{...rout.route.output, address: fromHex(rout.route.output.address)}
+              }
+            ) as RiverexRoute),
+          tokenPath: (rout.tokenPath.map(path => ({
+            ...path,
+            address: fromHex(path.address)
+          })))as Token[],
+          poolAddresses: rout.poolAddresses.map(address => fromHex(address))
+        })
+      })
     }
 
+    console.log(swapRoute.route)
     return swapRoute;
   }
 
@@ -1002,10 +398,6 @@ export class AlphaRouter
       routingConfig,
     );
 
-    if (bestSwapRoute) {
-      this.emitPoolSelectionMetrics(bestSwapRoute, allCandidatePools);
-    }
-
     return bestSwapRoute;
   }
 
@@ -1023,20 +415,42 @@ export class AlphaRouter
     }
   }
 
-  private async getGasPriceWei(): Promise<BigNumber> {
-    // Track how long it takes to resolve this async call.
-    const beforeGasTimestamp = Date.now();
+  private async getGasPriceWei(retryNumber: number = 2): Promise<BigNumber> {
+    // Tron has fixed gas price
+    if(isTronChain(this.chainId)){
+      return BigNumber.from("1");
+    }
 
-    // Get an estimate of the gas price to use when estimating gas cost of different routes.
-    const { gasPriceWei } = await this.gasPriceProvider.getGasPrice();
+    const config = {
+      headers: {
+        'APP_INTERNAL_AUTH': process.env.APP_INTERNAL_AUTH
+      }
+    };
 
-    metric.putMetric(
-      'GasPriceLoad',
-      Date.now() - beforeGasTimestamp,
-      MetricLoggerUnit.Milliseconds
-    );
+    const gasPriceURL = process.env.GAS_PRICE_URL!.replace("{chainId}", this.chainId.toString()) as string;
+    const timeout = new Timeout();
 
-    return gasPriceWei;
+    try {
+      const getGasPricePromise = axios.get(gasPriceURL, config);
+      const timerPromise = timeout.set(TIMEOUT).then(() => {
+        throw new Error(
+          `Timed out getting gas price from api: ${timeout}`
+        );
+      });
+      const response = await Promise.race([getGasPricePromise,timerPromise]);
+
+      console.log(`gas price of chainId ${this.chainId}=`, response.data.data);
+      return BigNumber.from(response.data.data);
+    } catch(error) {
+      console.log("retrying gas price fetch");
+      if(retryNumber <= 1) {
+        console.error("didn't get gas price");
+        return BigNumber.from(0);
+      }
+      // If failed, wait for a second and then retry
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return await this.getGasPriceWei(retryNumber - 1);
+    }
   }
 
   // Note multiplications here can result in a loss of precision in the amounts (e.g. taking 50% of 101)
@@ -1056,281 +470,5 @@ export class AlphaRouter
     }
 
     return [percents, amounts];
-  }
-
-  private async buildSwapAndAddMethodParameters(
-    trade: Trade<Currency, Currency, TradeType>,
-    swapAndAddOptions: SwapAndAddOptions,
-    swapAndAddParameters: SwapAndAddParameters
-  ): Promise<MethodParameters> {
-    const {
-      swapOptions: { recipient, slippageTolerance, deadline, inputTokenPermit },
-      addLiquidityOptions: addLiquidityConfig,
-    } = swapAndAddOptions;
-
-    const preLiquidityPosition = swapAndAddParameters.preLiquidityPosition;
-    const finalBalanceTokenIn =
-      swapAndAddParameters.initialBalanceTokenIn.subtract(trade.inputAmount);
-    const finalBalanceTokenOut =
-      swapAndAddParameters.initialBalanceTokenOut.add(trade.outputAmount);
-    const approvalTypes = await this.swapRouterProvider.getApprovalType(
-      finalBalanceTokenIn,
-      finalBalanceTokenOut
-    );
-    const zeroForOne = finalBalanceTokenIn.currency.wrapped.sortsBefore(
-      finalBalanceTokenOut.currency.wrapped
-    );
-    return {
-      ...SwapRouter.swapAndAddCallParameters(
-        trade,
-        {
-          recipient,
-          slippageTolerance,
-          deadlineOrPreviousBlockhash: deadline,
-          inputTokenPermit,
-        },
-        Position.fromAmounts({
-          pool: preLiquidityPosition.pool,
-          tickLower: preLiquidityPosition.tickLower,
-          tickUpper: preLiquidityPosition.tickUpper,
-          amount0: zeroForOne
-            ? finalBalanceTokenIn.quotient.toString()
-            : finalBalanceTokenOut.quotient.toString(),
-          amount1: zeroForOne
-            ? finalBalanceTokenOut.quotient.toString()
-            : finalBalanceTokenIn.quotient.toString(),
-          useFullPrecision: false,
-        }),
-        addLiquidityConfig,
-        approvalTypes.approvalTokenIn,
-        approvalTypes.approvalTokenOut
-      ),
-      to: SWAP_ROUTER_02_ADDRESSES(this.chainId),
-    };
-  }
-
-  private emitPoolSelectionMetrics(
-    swapRouteRaw: {
-      quote: CurrencyAmount;
-      quoteGasAdjusted: CurrencyAmount;
-      routes: RouteWithValidQuote[];
-      estimatedGasUsed: BigNumber;
-    },
-    allPoolsBySelection: CandidatePoolsBySelectionCriteria[]
-  ) {
-    const poolAddressesUsed = new Set<string>();
-    const { routes: routeAmounts } = swapRouteRaw;
-    _(routeAmounts)
-      .flatMap((routeAmount) => {
-        const { poolAddresses } = routeAmount;
-        return poolAddresses;
-      })
-      .forEach((address: string) => {
-        poolAddressesUsed.add(address.toLowerCase());
-      });
-
-    for (const poolsBySelection of allPoolsBySelection) {
-      const { protocol } = poolsBySelection;
-      _.forIn(
-        poolsBySelection.selections,
-        (pools: PoolId[], topNSelection: string) => {
-          const topNUsed =
-            _.findLastIndex(pools, (pool) =>
-              poolAddressesUsed.has(pool.id.toLowerCase())
-            ) + 1;
-          metric.putMetric(
-            _.capitalize(`${protocol}${topNSelection}`),
-            topNUsed,
-            MetricLoggerUnit.Count
-          );
-        }
-      );
-    }
-
-    let hasV3Route = false;
-    let hasV2Route = false;
-    let hasMixedRoute = false;
-    for (const routeAmount of routeAmounts) {
-      if (routeAmount.protocol === Protocol.V3) {
-        hasV3Route = true;
-      }
-      if (routeAmount.protocol === Protocol.V2) {
-        hasV2Route = true;
-      }
-      if (routeAmount.protocol === Protocol.MIXED) {
-        hasMixedRoute = true;
-      }
-    }
-
-    if (hasMixedRoute && (hasV3Route || hasV2Route)) {
-      if (hasV3Route && hasV2Route) {
-        metric.putMetric(
-          `MixedAndV3AndV2SplitRoute`,
-          1,
-          MetricLoggerUnit.Count
-        );
-        metric.putMetric(
-          `MixedAndV3AndV2SplitRouteForChain${this.chainId}`,
-          1,
-          MetricLoggerUnit.Count
-        );
-      } else if (hasV3Route) {
-        metric.putMetric(`MixedAndV3SplitRoute`, 1, MetricLoggerUnit.Count);
-        metric.putMetric(
-          `MixedAndV3SplitRouteForChain${this.chainId}`,
-          1,
-          MetricLoggerUnit.Count
-        );
-      } else if (hasV2Route) {
-        metric.putMetric(`MixedAndV2SplitRoute`, 1, MetricLoggerUnit.Count);
-        metric.putMetric(
-          `MixedAndV2SplitRouteForChain${this.chainId}`,
-          1,
-          MetricLoggerUnit.Count
-        );
-      }
-    } else if (hasV3Route && hasV2Route) {
-      metric.putMetric(`V3AndV2SplitRoute`, 1, MetricLoggerUnit.Count);
-      metric.putMetric(
-        `V3AndV2SplitRouteForChain${this.chainId}`,
-        1,
-        MetricLoggerUnit.Count
-      );
-    } else if (hasMixedRoute) {
-      if (routeAmounts.length > 1) {
-        metric.putMetric(`MixedSplitRoute`, 1, MetricLoggerUnit.Count);
-        metric.putMetric(
-          `MixedSplitRouteForChain${this.chainId}`,
-          1,
-          MetricLoggerUnit.Count
-        );
-      } else {
-        metric.putMetric(`MixedRoute`, 1, MetricLoggerUnit.Count);
-        metric.putMetric(
-          `MixedRouteForChain${this.chainId}`,
-          1,
-          MetricLoggerUnit.Count
-        );
-      }
-    } else if (hasV3Route) {
-      if (routeAmounts.length > 1) {
-        metric.putMetric(`V3SplitRoute`, 1, MetricLoggerUnit.Count);
-        metric.putMetric(
-          `V3SplitRouteForChain${this.chainId}`,
-          1,
-          MetricLoggerUnit.Count
-        );
-      } else {
-        metric.putMetric(`V3Route`, 1, MetricLoggerUnit.Count);
-        metric.putMetric(
-          `V3RouteForChain${this.chainId}`,
-          1,
-          MetricLoggerUnit.Count
-        );
-      }
-    } else if (hasV2Route) {
-      if (routeAmounts.length > 1) {
-        metric.putMetric(`V2SplitRoute`, 1, MetricLoggerUnit.Count);
-        metric.putMetric(
-          `V2SplitRouteForChain${this.chainId}`,
-          1,
-          MetricLoggerUnit.Count
-        );
-      } else {
-        metric.putMetric(`V2Route`, 1, MetricLoggerUnit.Count);
-        metric.putMetric(
-          `V2RouteForChain${this.chainId}`,
-          1,
-          MetricLoggerUnit.Count
-        );
-      }
-    }
-  }
-
-  private calculateOptimalRatio(
-    position: Position,
-    sqrtRatioX96: JSBI,
-    zeroForOne: boolean
-  ): Fraction {
-    const upperSqrtRatioX96 = TickMath.getSqrtRatioAtTick(position.tickUpper);
-    const lowerSqrtRatioX96 = TickMath.getSqrtRatioAtTick(position.tickLower);
-
-    // returns Fraction(0, 1) for any out of range position regardless of zeroForOne. Implication: function
-    // cannot be used to determine the trading direction of out of range positions.
-    if (
-      JSBI.greaterThan(sqrtRatioX96, upperSqrtRatioX96) ||
-      JSBI.lessThan(sqrtRatioX96, lowerSqrtRatioX96)
-    ) {
-      return new Fraction(0, 1);
-    }
-
-    const precision = JSBI.BigInt('1' + '0'.repeat(18));
-    let optimalRatio = new Fraction(
-      SqrtPriceMath.getAmount0Delta(
-        sqrtRatioX96,
-        upperSqrtRatioX96,
-        precision,
-        true
-      ),
-      SqrtPriceMath.getAmount1Delta(
-        sqrtRatioX96,
-        lowerSqrtRatioX96,
-        precision,
-        true
-      )
-    );
-    if (!zeroForOne) optimalRatio = optimalRatio.invert();
-    return optimalRatio;
-  }
-
-  public async userHasSufficientBalance(
-    fromAddress: string,
-    tradeType: TradeType,
-    amount: CurrencyAmount,
-    quote: CurrencyAmount
-  ): Promise<boolean> {
-    try {
-      const neededBalance = tradeType === TradeType.EXACT_INPUT ? amount : quote;
-      let balance;
-      if (neededBalance.currency.isNative) {
-        balance = await this.provider.getBalance(fromAddress);
-      } else {
-        const tokenContract = Erc20__factory.connect(
-          neededBalance.currency.address,
-          this.provider
-        );
-        balance = await tokenContract.balanceOf(fromAddress);
-      }
-      return balance.gte(BigNumber.from(neededBalance.quotient.toString()));
-    } catch (e) {
-      log.error(e, 'Error while checking user balance');
-      return false;
-    }
-  }
-
-  private absoluteValue(fraction: Fraction): Fraction {
-    const numeratorAbs = JSBI.lessThan(fraction.numerator, JSBI.BigInt(0))
-      ? JSBI.unaryMinus(fraction.numerator)
-      : fraction.numerator;
-    const denominatorAbs = JSBI.lessThan(fraction.denominator, JSBI.BigInt(0))
-      ? JSBI.unaryMinus(fraction.denominator)
-      : fraction.denominator;
-    return new Fraction(numeratorAbs, denominatorAbs);
-  }
-
-  private getBlockNumberPromise(): number | Promise<number> {
-    return retry(
-      async (_b, attempt) => {
-        if (attempt > 1) {
-          log.info(`Get block number attempt ${attempt}`);
-        }
-        return this.provider.getBlockNumber();
-      },
-      {
-        retries: 2,
-        minTimeout: 100,
-        maxTimeout: 1000,
-      }
-    );
   }
 }

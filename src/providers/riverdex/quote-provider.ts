@@ -106,7 +106,8 @@ export class RiverexQuoteProvider implements IRiverexQuoteProvider {
             insufficientReservesErrorCount = insufficientReservesErrorCount + 1;
             amountQuotes.push({ amount, quote: null });
           } else {
-            throw err;
+            log.error(err)
+            throw Error("fail");
           }
         }
       }

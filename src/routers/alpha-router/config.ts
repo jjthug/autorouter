@@ -114,5 +114,3 @@ export const DEFAULT_ROUTING_CONFIG_BY_CHAIN = (
       };
   }
 };
-export const ETH_GAS_STATION_API_URL =
-  'https://ethgasstation.info/api/ethgasAPI.json';

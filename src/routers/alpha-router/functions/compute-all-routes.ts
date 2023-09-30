@@ -106,7 +106,6 @@ export function computeAllRoutes<
       return;
     }
 
-    // todo changed involvesToken function
     if (
       currentRoute.length > 0 &&
       currentRoute[currentRoute.length - 1]!.involvesToken(tokenOut)
