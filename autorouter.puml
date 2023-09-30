@@ -1,0 +1,27 @@
+@startuml
+autonumber
+participant Client as cl
+participant "Autorouter\nService" as autor
+participant "Pools api" as poolsapi
+participant "uniswap v2\n Subgraph" as subgr
+
+== Send request from client ==
+cl -> autor : create tokenA -> tokenB best swap route request
+
+== Fetch riverex pools data ==
+
+autor -> poolsapi : fetch Riverex pools
+poolsapi -> autor : Riverex pools data
+
+== Fetch from uniswap subgraph (can be changed) ==
+autor -> subgr : get usd/native pools
+note left: Fetching usd/native pools to get gas quote in USD and
+subgr -> autor : usd/native pool data
+
+== Routing algorithm ==
+autor -> autor : get best swap route
+note left: The best route will not account for gas if there is no tokenB/Native or tokenB/USD pools
+
+== Return best route ==
+autor -> cl : {Best route(s), output quote, output quote adjusted for gas, gas cost in USD}
+@enduml

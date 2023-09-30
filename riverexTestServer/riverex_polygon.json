@@ -1,0 +1,381 @@
+{
+  "pairs": [
+    {
+      "address": "0x5f5FE123Cb724C97e0A1b5C9b3400B38aB9c757f",
+      "name": "HPO/USDT",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        "name": "Tether USD",
+        "symbol": "USDT",
+        "decimals": 6
+      },
+      "liquidity": "33535962005903643",
+      "reserve0": "561916385455021516635687",
+      "reserve1": "2026644292",
+      "decimals": "18",
+      "dataCreated": 1664977883,
+      "fee": 300,
+      "protocolFee": 50,
+      "liquidityProvidersFee": 250,
+      "apr": "0.000099665497364827",
+      "reserveUsd": "4054.97262181409319238683841422094594084962192",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0xDE84fd1A9E3F719aa874521280E91fCCafA906cB",
+      "name": "AAVE/HPO",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+        "name": "Aave Token",
+        "symbol": "AAVE",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "liquidity": "1095445115010332225913",
+      "reserve0": "7143754517954451508",
+      "reserve1": "168125351780993928478621",
+      "decimals": "18",
+      "dataCreated": 1671554615,
+      "fee": 300,
+      "protocolFee": 50,
+      "liquidityProvidersFee": 250,
+      "apr": "0.00000122972322142",
+      "reserveUsd": "1172.110269171812678469000587234377801887988735",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0xC232B6D7eAbA067A46d857d3eA3858D82fd35b0A",
+      "name": "HPO/WETH",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "name": "Wrapped Ether",
+        "symbol": "WETH",
+        "decimals": 18
+      },
+      "liquidity": "260768096208105947583",
+      "reserve0": "188247616854484973060959",
+      "reserve1": "362430722702774389",
+      "decimals": "18",
+      "dataCreated": 1669297547,
+      "fee": 150,
+      "protocolFee": 50,
+      "liquidityProvidersFee": 100,
+      "apr": "0.000003013898065389",
+      "reserveUsd": "1416.602887935073711005232390741630474062006078",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0x87272992606e84D060f9092179D9a424d19Fad96",
+      "name": "Welle/USDT",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0x1376a81fe3eE7D0e431f1Ac24286b00f3CCf44e7",
+        "name": "WelleToken",
+        "symbol": "Welle",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        "name": "Tether USD",
+        "symbol": "USDT",
+        "decimals": 6
+      },
+      "liquidity": "32284029217812145",
+      "reserve0": "1000676375510185280058354",
+      "reserve1": "1043025012",
+      "decimals": "18",
+      "dataCreated": 1665337151,
+      "fee": 300,
+      "protocolFee": 30,
+      "liquidityProvidersFee": 270,
+      "apr": "0.000002091925102183",
+      "reserveUsd": "2086.624165856266292777537971284181987860607938",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0x64C3eD17d680987Af6A140a8257c53c10b3dbAcA",
+      "name": "BUSD/HPO",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0x4Fabb145d64652a948d72533023f6E7A623C7C53",
+        "name": "Binance USD",
+        "symbol": "BUSD",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "liquidity": "16432864227982165548643",
+      "reserve0": "987568039116372497880",
+      "reserve1": "273650848794861774004902",
+      "decimals": "18",
+      "dataCreated": 1665160799,
+      "fee": 300,
+      "protocolFee": 50,
+      "liquidityProvidersFee": 250,
+      "apr": "0.0000012329538902",
+      "reserveUsd": "1984.585116632116938009297184611489756980446812",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0x15Ab9E042A96De9b181F2d9cCa9d9e6eBA24612c",
+      "name": "Welle/HPO",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0x1376a81fe3eE7D0e431f1Ac24286b00f3CCf44e7",
+        "name": "WelleToken",
+        "symbol": "Welle",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "liquidity": "457175005650002812485948",
+      "reserve0": "1039745690834473324213406",
+      "reserve1": "201019333509653530811954",
+      "decimals": "18",
+      "dataCreated": 1679151743,
+      "fee": 280,
+      "protocolFee": 30,
+      "liquidityProvidersFee": 250,
+      "apr": "0",
+      "reserveUsd": "1517.913906859320240274545523716076399941292802",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0x8F3861ad4Ca2Fc0C726359Da241ce10c6eE0De25",
+      "name": "DAI/HPO",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        "name": "Dai Stablecoin",
+        "symbol": "DAI",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "liquidity": "16431676725154983402709",
+      "reserve0": "992582627607703457184",
+      "reserve1": "272460246836954905631188",
+      "decimals": "18",
+      "dataCreated": 1665161279,
+      "fee": 300,
+      "protocolFee": 50,
+      "liquidityProvidersFee": 250,
+      "apr": "0.000002196363064591",
+      "reserveUsd": "2038.6834586627545783404418585111437290016036",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0x465e6E8851227e08d89B19944f7fC4D062b53E0F",
+      "name": "MKR/HPO",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
+        "name": "Maker",
+        "symbol": "MKR",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "liquidity": "368781778291715491400",
+      "reserve0": "819941646810506983",
+      "reserve1": "166029538149986851683908",
+      "decimals": "18",
+      "dataCreated": 1671568883,
+      "fee": 300,
+      "protocolFee": 50,
+      "liquidityProvidersFee": 250,
+      "apr": "0.000001402646851889",
+      "reserveUsd": "1133.44155214930420674669058418409672480568432",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0x9898CdCe922e68566303BFc47E1eeB70C5C2632f",
+      "name": "SHIB/HPO",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
+        "name": "SHIBA INU",
+        "symbol": "SHIB",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "liquidity": "1917533339080847734021",
+      "reserve0": "33843984661882469937527",
+      "reserve1": "108791251982039301568",
+      "decimals": "18",
+      "dataCreated": 1671559007,
+      "fee": 300,
+      "protocolFee": 50,
+      "liquidityProvidersFee": 250,
+      "apr": "0.000002218898990984",
+      "reserveUsd": "0.71290139661398572522859259856376244183825617",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0x09FA69ab07e5f5179c1A38e3237079b24c555e12",
+      "name": "LINK/HPO",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+        "name": "ChainLink Token",
+        "symbol": "LINK",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "liquidity": "3633180424916989997507",
+      "reserve0": "84142672623040719541",
+      "reserve1": "156936125836310335340766",
+      "decimals": "18",
+      "dataCreated": 1671551855,
+      "fee": 300,
+      "protocolFee": 50,
+      "liquidityProvidersFee": 250,
+      "apr": "0.000000527614844595",
+      "reserveUsd": "1219.00026695918622391972534254576134859982936",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0x0DA4766345867f82A8eCAB9cf00E216badA36ebF",
+      "name": "CHZ/HPO",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0x3506424F91fD33084466F402d5D97f05F8e3b4AF",
+        "name": "chiliZ",
+        "symbol": "CHZ",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "liquidity": "378173656441998981",
+      "reserve0": "64516191326181102",
+      "reserve1": "2217074555310595096",
+      "decimals": "18",
+      "dataCreated": 1671566219,
+      "fee": 300,
+      "protocolFee": 50,
+      "liquidityProvidersFee": 250,
+      "apr": "0.000000253773107656",
+      "reserveUsd": "0.017377709762322503835111910913346376584096",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0x55810a5eaF40Ed365656BDBe0E127aa69C3A4c8C",
+      "name": "QNT/HPO",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0x4a220E6096B25EADb88358cb44068A3248254675",
+        "name": "Quant",
+        "symbol": "QNT",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "liquidity": "6040275424941949",
+      "reserve0": "32733686299987",
+      "reserve1": "1114683058262359768",
+      "decimals": "18",
+      "dataCreated": 1671564731,
+      "fee": 300,
+      "protocolFee": 50,
+      "liquidityProvidersFee": 250,
+      "apr": "0.000000125088801607",
+      "reserveUsd": "0.00951855530965019266161969082730314604288",
+      "trackedReserveETH": 0.0026
+    },
+    {
+      "address": "0x97f468e5CF5f76ebc83F5844A5572E6a6eee8Ff2",
+      "name": "PAXG/HPO",
+      "firstToken": {
+        "chainId": 137,
+        "address": "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+        "name": "Paxos Gold",
+        "symbol": "PAXG",
+        "decimals": 18
+      },
+      "secondToken": {
+        "chainId": 137,
+        "address": "0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84",
+        "name": "Hippopotamus",
+        "symbol": "HPO",
+        "decimals": 18
+      },
+      "liquidity": "320901839392838",
+      "reserve0": "411502521250",
+      "reserve1": "250252894890197245",
+      "decimals": "18",
+      "dataCreated": 1671563987,
+      "fee": 300,
+      "protocolFee": 50,
+      "liquidityProvidersFee": 250,
+      "apr": "0.000000027291721974",
+      "reserveUsd": "0.0016228795038083658601274804870454663303",
+      "trackedReserveETH": 0.0026
+    }
+  ]
+}

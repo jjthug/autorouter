@@ -1,0 +1,17 @@
+[
+  {
+    "URL": "http://localhost:3001/getBestRoute?chainId=1&InputAmount=100000000000000000000000&tokenInAddress=0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84&tokenInDecimals=18&tokenOutAddress=0x1376a81fe3eE7D0e431f1Ac24286b00f3CCf44e7&tokenOutDecimals=18"
+  },
+  {
+    "URL": "http://localhost:3001/getBestRoute?chainId=1&InputAmount=100000000000000000000&tokenInAddress=0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9&tokenInDecimals=18&tokenOutAddress=0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84&tokenOutDecimals=18&maxSwapsPerPath&maxSplits"
+  },
+  {
+    "URL": "http://localhost:3001/getBestRoute?chainId=1&InputAmount=100000000000000000000&tokenInAddress=0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9&tokenInDecimals=18&tokenOutAddress=0xdAC17F958D2ee523a2206206994597C13D831ec7&tokenOutDecimals=6&maxSwapsPerPath&maxSplits"
+  },
+  {
+    "URL": "http://localhost:3001/getBestRoute?chainId=56&InputAmount=10000000000000000000000&tokenInAddress=0x1376a81fe3eE7D0e431f1Ac24286b00f3CCf44e7&tokenInDecimals=18&tokenOutAddress=0xdAC17F958D2ee523a2206206994597C13D831ec7&tokenOutDecimals=6&maxSwapsPerPath&maxSplits"
+  },
+  {
+    "URL": "http://localhost:3001/getBestRoute?chainId=1&InputAmount=100000000000000000000000&tokenInAddress=0xa0ED3C520dC0632657AD2EaaF19E26C4fD431a84&tokenInDecimals=18&tokenOutAddress=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2&tokenOutDecimals=18&maxSwapsPerPath&maxSplits"
+  }
+]
